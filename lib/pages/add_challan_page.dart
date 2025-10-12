@@ -138,26 +138,12 @@ class _AddChallanPageState extends State<AddChallanPage> {
             _selectedType = restored;
             amountController.text = restored.fineAmount.toString();
           });
-          if (mounted)
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: Text(
-                  'Restored previously selected type: ${restored.typeName}',
-                ),
-              ),
-            );
         } catch (_) {
           // previously selected type not present in new list; clear selection
           setState(() {
             _selectedType = null;
             amountController.clear();
           });
-          if (mounted)
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: Text('Previously selected type not found in new list'),
-              ),
-            );
         }
       }
     } catch (e) {

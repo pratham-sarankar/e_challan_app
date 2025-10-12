@@ -14,6 +14,21 @@ import '../utils/constants.dart';
 class ApiService {
   final String baseUrl = Constants.apiBaseUrl;
 
+  // Debug fields: store last response for /challan-types to help diagnose parsing/auth issues.
+  String? _lastGetChallanTypesRawBody;
+  int? _lastGetChallanTypesStatus;
+
+  /// Public getters for debug fields (read-only)
+  int? get lastGetChallanTypesStatus => _lastGetChallanTypesStatus;
+
+  String? get lastGetChallanTypesRawBody => _lastGetChallanTypesRawBody;
+
+  /// Backwards-compatible methods to return last challan-types status and raw body
+  /// (useful for callers that prefer method access)
+  int? getLastChallanTypesStatus() => _lastGetChallanTypesStatus;
+
+  String? getLastChallanTypesRawBody() => _lastGetChallanTypesRawBody;
+
   /// Return headers including Authorization if access_token present
   Future<Map<String, String>> getAuthHeaders() async {
     final prefs = await SharedPreferences.getInstance();
@@ -91,6 +106,9 @@ class ApiService {
 
     // Keep helpful debug logging for developers
     print('[ApiService] GET $url -> ${response.statusCode}');
+    // Store raw response for diagnostics
+    _lastGetChallanTypesStatus = response.statusCode;
+    _lastGetChallanTypesRawBody = response.body;
 
     if (response.statusCode == 200) {
       try {
@@ -479,6 +497,111 @@ class ApiService {
     } else {
       String msg =
           'Failed to fetch challan images (status ${response.statusCode})';
+      try {
+        final decoded = jsonDecode(response.body);
+        if (decoded is Map && decoded['message'] != null)
+          msg = decoded['message'];
+      } catch (_) {}
+      throw Exception(msg);
+    }
+  }
+
+  /// Fetch images for a specific challan id and return objects containing id and url.
+  /// This is useful when the client needs the server image id for operations like delete.
+  Future<List<Map<String, dynamic>>> getChallanImageObjects(
+    int challanId,
+  ) async {
+    final url = Uri.parse('$baseUrl/challans/$challanId/images');
+    final headers = await getAuthHeaders();
+    final response = await http.get(url, headers: headers);
+
+    print('[ApiService] GET $url -> ${response.statusCode}');
+
+    if (response.statusCode == 200) {
+      final decoded = jsonDecode(response.body);
+      if (decoded is Map &&
+          decoded['status'] == 'success' &&
+          decoded['data'] != null) {
+        final data = decoded['data'];
+        if (data is Map && data['images'] is List) {
+          final List images = data['images'] as List;
+
+          String toFullUrl(String? p) {
+            if (p == null) return '';
+            final normalized = p.replaceAll('\\', '/').replaceAll('//', '/');
+            if (normalized.startsWith('/')) return '$baseUrl$normalized';
+            return '$baseUrl/$normalized';
+          }
+
+          return images
+              .where(
+                (e) => e is Map && (e['image_path'] ?? e['image_name']) != null,
+              )
+              .map<Map<String, dynamic>>((e) {
+                final map = e as Map<String, dynamic>;
+                final path =
+                    (map['image_path'] ?? map['image_name'])?.toString() ?? '';
+                final urlStr = toFullUrl(path);
+                final int id = (map['id'] ?? map['image_id'] ?? 0) as int;
+                return {'id': id, 'url': urlStr, 'raw': map};
+              })
+              .toList();
+        }
+        return [];
+      } else {
+        final message = (decoded is Map && decoded['message'] != null)
+            ? decoded['message']
+            : 'Unexpected response';
+        throw Exception(message);
+      }
+    } else {
+      String msg =
+          'Failed to fetch challan images (status ${response.statusCode})';
+      try {
+        final decoded = jsonDecode(response.body);
+        if (decoded is Map && decoded['message'] != null)
+          msg = decoded['message'];
+      } catch (_) {}
+      throw Exception(msg);
+    }
+  }
+
+  /// Delete a challan image identified by challanId and imageId.
+  /// Throws on non-success responses.
+  Future<void> deleteChallanImage(int challanId, int imageId) async {
+    final url = Uri.parse('$baseUrl/challans/$challanId/images/$imageId');
+    final headers = await getAuthHeaders();
+    final response = await http.delete(url, headers: headers);
+
+    print('[ApiService] DELETE $url -> ${response.statusCode}');
+
+    if (response.statusCode == 200 || response.statusCode == 204) {
+      // success
+      return;
+    } else {
+      String msg = 'Failed to delete image (status ${response.statusCode})';
+      try {
+        final decoded = jsonDecode(response.body);
+        if (decoded is Map && decoded['message'] != null)
+          msg = decoded['message'];
+      } catch (_) {}
+      throw Exception(msg);
+    }
+  }
+
+  /// Delete a challan by id. Throws on non-success responses.
+  Future<void> deleteChallan(int challanId) async {
+    final url = Uri.parse('$baseUrl/challans/$challanId');
+    final headers = await getAuthHeaders();
+    final response = await http.delete(url, headers: headers);
+
+    print('[ApiService] DELETE $url -> ${response.statusCode}');
+
+    if (response.statusCode == 200 || response.statusCode == 204) {
+      // success
+      return;
+    } else {
+      String msg = 'Failed to delete challan (status ${response.statusCode})';
       try {
         final decoded = jsonDecode(response.body);
         if (decoded is Map && decoded['message'] != null)

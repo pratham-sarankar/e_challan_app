@@ -1,6 +1,9 @@
+import 'dart:convert';
+
 import 'package:animate_do/animate_do.dart';
 import 'package:carousel_slider/carousel_slider.dart';
 import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:shimmer/shimmer.dart';
 
@@ -10,11 +13,20 @@ import 'information_page.dart';
 import 'login_page.dart';
 import 'view_challan_page.dart';
 
-class DashboardPage extends StatelessWidget {
+class DashboardPage extends StatefulWidget {
   static List<Map<String, dynamic>> challans = [];
 
-  final String officerName = "Bhupendra Sahu";
-  final String officerPhone = "+91-9876543210";
+  DashboardPage({super.key});
+
+  @override
+  State<DashboardPage> createState() => _DashboardPageState();
+}
+
+class _DashboardPageState extends State<DashboardPage> {
+  String officerName = "";
+  String officerPhone = "";
+  bool _isLoading = true;
+  String? _error;
 
   final List<String> bannerImages = [
     'https://www.brantford.ca/en/living-here/resources/Images/Climate-Action/litter-clean-up.png',
@@ -23,7 +35,11 @@ class DashboardPage extends StatelessWidget {
     'https://img.freepik.com/premium-vector/cleaning-city-service-illustration-cartoon-flat-worker-cleaner-people-uniform-working-with-equipment-clean-city-urban-street_169479-789.jpg',
   ];
 
-  DashboardPage({super.key});
+  @override
+  void initState() {
+    super.initState();
+    _fetchProfile();
+  }
 
   // Clear stored authentication data (tokens/user info)
   Future<void> _clearAuthData() async {
@@ -37,6 +53,76 @@ class DashboardPage extends StatelessWidget {
       await prefs.remove('expires_in');
       await prefs.remove('token_timestamp');
     } catch (_) {}
+  }
+
+  Future<void> _fetchProfile() async {
+    setState(() {
+      _isLoading = true;
+      _error = null;
+    });
+
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final token =
+          prefs.getString('access_token') ??
+          // fallback sample token from user's provided curl (short-lived in real use)
+          'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJ0ZXN0QDQiLCJleHAiOjE3NjAzMDAyNjB9.rFGAsxAVl4PuyZRdrl45Tl6WpOgBwIxueXB8wfnTl3k';
+
+      final uri = Uri.parse('https://echallan-bilaspur.sublimeai.in/profile');
+      final resp = await http
+          .get(
+            uri,
+            headers: {
+              'accept': 'application/json',
+              'Authorization': 'Bearer $token',
+            },
+          )
+          .timeout(Duration(seconds: 15));
+
+      if (resp.statusCode == 200) {
+        final body = json.decode(resp.body);
+        if (body != null &&
+            body['status'] == 'success' &&
+            body['data'] != null) {
+          final data = body['data'];
+          setState(() {
+            officerName = data['username'] ?? '';
+            // try mobile then email as fallback
+            officerPhone = data['mobile'] ?? data['email'] ?? '';
+            _isLoading = false;
+          });
+          return;
+        } else {
+          setState(() {
+            _error = body['message'] ?? 'Unexpected response';
+            _isLoading = false;
+          });
+          return;
+        }
+      } else if (resp.statusCode == 401) {
+        // unauthorized - clear auth and navigate to login
+        await _clearAuthData();
+        if (mounted) {
+          Navigator.pushAndRemoveUntil(
+            context,
+            MaterialPageRoute(builder: (_) => LoginPage()),
+            (route) => false,
+          );
+        }
+        return;
+      } else {
+        setState(() {
+          _error = 'Server returned ${resp.statusCode}';
+          _isLoading = false;
+        });
+        return;
+      }
+    } catch (e) {
+      setState(() {
+        _error = 'Failed to load profile';
+        _isLoading = false;
+      });
+    }
   }
 
   Future<bool> _showExitConfirmation(BuildContext context) async {
@@ -151,7 +237,7 @@ class DashboardPage extends StatelessWidget {
                     borderRadius: BorderRadius.circular(16),
                     boxShadow: [
                       BoxShadow(
-                        color: Colors.black.withOpacity(0.1),
+                        color: Colors.black.withAlpha(26),
                         blurRadius: 10,
                         offset: Offset(0, 4),
                       ),
@@ -180,17 +266,68 @@ class DashboardPage extends StatelessWidget {
                       Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text(
-                            officerName,
-                            style: Theme.of(context).textTheme.titleLarge
-                                ?.copyWith(fontWeight: FontWeight.bold),
-                          ),
-                          SizedBox(height: 4),
-                          Text(
-                            officerPhone,
-                            style: Theme.of(context).textTheme.bodyMedium
-                                ?.copyWith(color: Colors.grey[600]),
-                          ),
+                          // show loading shimmer or error or the profile data
+                          if (_isLoading)
+                            SizedBox(
+                              width: 200,
+                              child: Shimmer.fromColors(
+                                baseColor: Colors.grey[300]!,
+                                highlightColor: Colors.grey[100]!,
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Container(height: 18, color: Colors.white),
+                                    SizedBox(height: 6),
+                                    Container(
+                                      height: 14,
+                                      width: 120,
+                                      color: Colors.white,
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            )
+                          else if (_error != null)
+                            SizedBox(
+                              width: 200,
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    'Unknown User',
+                                    style: Theme.of(context)
+                                        .textTheme
+                                        .titleLarge
+                                        ?.copyWith(fontWeight: FontWeight.bold),
+                                  ),
+                                  SizedBox(height: 4),
+                                  Text(
+                                    _error ?? '',
+                                    style: Theme.of(context)
+                                        .textTheme
+                                        .bodyMedium
+                                        ?.copyWith(color: Colors.grey[600]),
+                                  ),
+                                ],
+                              ),
+                            )
+                          else
+                            Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  officerName,
+                                  style: Theme.of(context).textTheme.titleLarge
+                                      ?.copyWith(fontWeight: FontWeight.bold),
+                                ),
+                                SizedBox(height: 4),
+                                Text(
+                                  officerPhone,
+                                  style: Theme.of(context).textTheme.bodyMedium
+                                      ?.copyWith(color: Colors.grey[600]),
+                                ),
+                              ],
+                            ),
                         ],
                       ),
                     ],
@@ -218,7 +355,7 @@ class DashboardPage extends StatelessWidget {
                             borderRadius: BorderRadius.circular(16),
                             boxShadow: [
                               BoxShadow(
-                                color: Colors.black.withOpacity(0.1),
+                                color: Colors.black.withAlpha(26),
                                 blurRadius: 10,
                                 offset: Offset(0, 4),
                               ),
@@ -349,7 +486,7 @@ class DashboardPage extends StatelessWidget {
           borderRadius: BorderRadius.circular(16),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withOpacity(0.1),
+              color: Colors.black.withAlpha(26),
               blurRadius: 10,
               offset: Offset(0, 4),
             ),
@@ -361,7 +498,7 @@ class DashboardPage extends StatelessWidget {
             Container(
               padding: EdgeInsets.all(16),
               decoration: BoxDecoration(
-                color: Theme.of(context).colorScheme.primary.withOpacity(0.1),
+                color: Theme.of(context).colorScheme.primary.withAlpha(26),
                 shape: BoxShape.circle,
               ),
               child: Image.asset(iconPath, height: 40, width: 40),
