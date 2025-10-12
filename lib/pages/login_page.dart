@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
-import 'package:municipal_e_challan/pages/otp_verification_page.dart';
+import 'package:municipal_e_challan/pages/dashboard_page.dart';
 import 'package:municipal_e_challan/pages/register_page.dart';
 import 'package:municipal_e_challan/services/api_services.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class LoginPage extends StatefulWidget {
   const LoginPage({super.key});
@@ -11,27 +12,49 @@ class LoginPage extends StatefulWidget {
 }
 
 class _LoginPageState extends State<LoginPage> {
-  final mobileController = TextEditingController();
+  final loginIdController = TextEditingController();
+  final passwordController = TextEditingController();
   bool isLoading = false;
   final ApiService apiService = ApiService();
 
-  void sendOtp() async {
-    if (mobileController.text.isNotEmpty) {
-      setState(() => isLoading = true);
+  Future<void> _login() async {
+    final loginId = loginIdController.text.trim();
+    final password = passwordController.text;
+    if (loginId.isEmpty || password.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Please enter both login ID and password')),
+      );
+      return;
+    }
+
+    setState(() => isLoading = true);
+    try {
+      final resp = await apiService.loginWithCredentials(loginId, password);
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString('access_token', resp.accessToken);
+      await prefs.setString('token_type', resp.tokenType);
+      await prefs.setInt('user_id', resp.userId);
+      await prefs.setString('username', resp.username);
+      await prefs.setString('role', resp.role);
+      // Save expiry and timestamp to validate session on app restart
       try {
-        await apiService.loginOfficer(mobileController.text);
-        Navigator.push(
-          context,
-          MaterialPageRoute(
-            builder: (_) => OtpVerificationPage(mobileNumber: mobileController.text),
-          ),
+        await prefs.setInt('expires_in', resp.expiresIn);
+        await prefs.setInt(
+          'token_timestamp',
+          DateTime.now().millisecondsSinceEpoch,
         );
-      } catch (e) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed to send OTP: ${e.toString()}')),
-        );
-      }
-      setState(() => isLoading = false);
+      } catch (_) {}
+
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (_) => DashboardPage()),
+      );
+    } catch (e) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Login failed: ${e.toString()}')));
+    } finally {
+      if (mounted) setState(() => isLoading = false);
     }
   }
 
@@ -56,9 +79,9 @@ class _LoginPageState extends State<LoginPage> {
                   "Officer Login",
                   textAlign: TextAlign.center,
                   style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                        color: Theme.of(context).colorScheme.primary,
-                        fontWeight: FontWeight.bold,
-                      ),
+                    color: Theme.of(context).colorScheme.primary,
+                    fontWeight: FontWeight.bold,
+                  ),
                 ),
                 SizedBox(height: 40),
                 Container(
@@ -67,7 +90,7 @@ class _LoginPageState extends State<LoginPage> {
                     color: Colors.white,
                     boxShadow: [
                       BoxShadow(
-                        color: Colors.black.withOpacity(0.1),
+                        color: Colors.black.withAlpha(26),
                         blurRadius: 10,
                         offset: Offset(0, 5),
                       ),
@@ -78,12 +101,22 @@ class _LoginPageState extends State<LoginPage> {
                     child: Column(
                       children: [
                         TextField(
-                          controller: mobileController,
-                          keyboardType: TextInputType.phone,
+                          controller: loginIdController,
+                          keyboardType: TextInputType.emailAddress,
                           decoration: InputDecoration(
-                            labelText: "Mobile Number",
-                            prefixIcon: Icon(Icons.phone_android),
-                            hintText: "Enter your mobile number",
+                            labelText: "Login ID",
+                            prefixIcon: Icon(Icons.person),
+                            hintText: "Enter your login id (email or username)",
+                          ),
+                        ),
+                        SizedBox(height: 12),
+                        TextField(
+                          controller: passwordController,
+                          obscureText: true,
+                          decoration: InputDecoration(
+                            labelText: "Password",
+                            prefixIcon: Icon(Icons.lock),
+                            hintText: "Enter your password",
                           ),
                         ),
                       ],
@@ -92,14 +125,14 @@ class _LoginPageState extends State<LoginPage> {
                 ),
                 SizedBox(height: 30),
                 ElevatedButton(
-                  onPressed: isLoading ? null : sendOtp,
+                  onPressed: isLoading ? null : _login,
                   style: ElevatedButton.styleFrom(
                     padding: EdgeInsets.symmetric(vertical: 16),
                     backgroundColor: Theme.of(context).colorScheme.primary,
                     foregroundColor: Colors.white,
                     disabledBackgroundColor: Theme.of(
                       context,
-                    ).colorScheme.primary.withOpacity(0.6),
+                    ).colorScheme.primary.withAlpha(153),
                   ),
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.center,
@@ -114,10 +147,7 @@ class _LoginPageState extends State<LoginPage> {
                             strokeWidth: 2,
                           ),
                         ),
-                      Text(
-                        "Send OTP",
-                        style: TextStyle(fontSize: 18),
-                      ),
+                      Text("Login", style: TextStyle(fontSize: 18)),
                     ],
                   ),
                 ),

@@ -1,13 +1,14 @@
+import 'package:animate_do/animate_do.dart';
 import 'package:carousel_slider/carousel_slider.dart';
 import 'package:flutter/material.dart';
-import 'package:animate_do/animate_do.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:shimmer/shimmer.dart';
 
 import 'WorkReportPage.dart';
 import 'add_challan_page.dart';
 import 'information_page.dart';
-import 'view_challan_page.dart';
 import 'login_page.dart';
+import 'view_challan_page.dart';
 
 class DashboardPage extends StatelessWidget {
   static List<Map<String, dynamic>> challans = [];
@@ -23,6 +24,20 @@ class DashboardPage extends StatelessWidget {
   ];
 
   DashboardPage({super.key});
+
+  // Clear stored authentication data (tokens/user info)
+  Future<void> _clearAuthData() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.remove('access_token');
+      await prefs.remove('token_type');
+      await prefs.remove('user_id');
+      await prefs.remove('username');
+      await prefs.remove('role');
+      await prefs.remove('expires_in');
+      await prefs.remove('token_timestamp');
+    } catch (_) {}
+  }
 
   Future<bool> _showExitConfirmation(BuildContext context) async {
     return await showDialog<bool>(
@@ -67,11 +82,14 @@ class DashboardPage extends StatelessWidget {
                       SizedBox(width: 16),
                       Expanded(
                         child: ElevatedButton(
-                          onPressed: () {
+                          onPressed: () async {
                             Navigator.pop(context);
-                            Navigator.pushReplacement(
+                            // clear auth data before navigating to login
+                            await _clearAuthData();
+                            Navigator.pushAndRemoveUntil(
                               context,
                               MaterialPageRoute(builder: (_) => LoginPage()),
+                              (route) => false,
                             );
                           },
                           style: ElevatedButton.styleFrom(
@@ -404,11 +422,14 @@ class DashboardPage extends StatelessWidget {
                   SizedBox(width: 16),
                   Expanded(
                     child: ElevatedButton(
-                      onPressed: () {
+                      onPressed: () async {
                         Navigator.pop(context);
-                        Navigator.pushReplacement(
+                        // clear auth data before navigating to login
+                        await _clearAuthData();
+                        Navigator.pushAndRemoveUntil(
                           context,
                           MaterialPageRoute(builder: (_) => LoginPage()),
+                          (route) => false,
                         );
                       },
                       style: ElevatedButton.styleFrom(

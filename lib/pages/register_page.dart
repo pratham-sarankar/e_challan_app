@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:municipal_e_challan/pages/dashboard_page.dart';
 import 'package:municipal_e_challan/services/api_services.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import 'login_page.dart'; // Import login page
 
@@ -12,8 +14,13 @@ class RegisterPage extends StatefulWidget {
 
 class _RegisterPageState extends State<RegisterPage> {
   final _formKey = GlobalKey<FormState>();
-  TextEditingController fullNameController = TextEditingController();
+  TextEditingController usernameController = TextEditingController();
   TextEditingController mobileController = TextEditingController();
+  TextEditingController emailController = TextEditingController();
+  TextEditingController loginIdController = TextEditingController();
+  TextEditingController passwordController = TextEditingController();
+  String role = 'inspector';
+
   final ApiService apiService = ApiService();
   bool isLoading = false;
 
@@ -21,17 +28,58 @@ class _RegisterPageState extends State<RegisterPage> {
     if (_formKey.currentState!.validate()) {
       setState(() => isLoading = true);
       try {
-        await apiService.registerOfficer(
-          fullNameController.text,
-          mobileController.text,
+        final resp = await apiService.registerOfficer(
+          username: usernameController.text.trim(),
+          mobile: mobileController.text.trim(),
+          email: emailController.text.trim(),
+          loginId: loginIdController.text.trim(),
+          password: passwordController.text,
+          role: role,
         );
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Registration successful! Please login.')),
-        );
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(builder: (_) => LoginPage()),
-        );
+
+        // Registration succeeded — attempt automatic login
+        try {
+          final loginResp = await apiService.loginWithCredentials(
+            loginIdController.text.trim(),
+            passwordController.text,
+          );
+
+          final prefs = await SharedPreferences.getInstance();
+          await prefs.setString('access_token', loginResp.accessToken);
+          await prefs.setString('token_type', loginResp.tokenType);
+          await prefs.setInt('user_id', loginResp.userId);
+          await prefs.setString('username', loginResp.username);
+          await prefs.setString('role', loginResp.role);
+          try {
+            await prefs.setInt('expires_in', loginResp.expiresIn);
+            await prefs.setInt(
+              'token_timestamp',
+              DateTime.now().millisecondsSinceEpoch,
+            );
+          } catch (_) {}
+
+          // Navigate to dashboard and clear back stack
+          if (!mounted) return;
+          Navigator.pushAndRemoveUntil(
+            context,
+            MaterialPageRoute(builder: (_) => DashboardPage()),
+            (route) => false,
+          );
+        } catch (loginError) {
+          // If auto-login fails, show a message and navigate to Login page
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                'Registered but auto-login failed: ${loginError.toString()}',
+              ),
+            ),
+          );
+          if (!mounted) return;
+          Navigator.pushReplacement(
+            context,
+            MaterialPageRoute(builder: (_) => LoginPage()),
+          );
+        }
       } catch (e) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Failed to register: ${e.toString()}')),
@@ -67,11 +115,11 @@ class _RegisterPageState extends State<RegisterPage> {
                 key: _formKey,
                 child: Column(
                   children: [
-                    // ✅ Name Field
+                    // Username Field
                     TextFormField(
-                      controller: fullNameController,
+                      controller: usernameController,
                       decoration: InputDecoration(
-                        labelText: "Full Name",
+                        labelText: "Username",
                         prefixIcon: Icon(Icons.person),
                         border: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(12),
@@ -81,14 +129,14 @@ class _RegisterPageState extends State<RegisterPage> {
                       ),
                       validator: (value) {
                         if (value == null || value.isEmpty) {
-                          return 'Please enter your full name';
+                          return 'Please enter username';
                         }
                         return null;
                       },
                     ),
                     SizedBox(height: 16),
 
-                    // ✅ Mobile Number Field
+                    // Mobile Number Field
                     TextFormField(
                       controller: mobileController,
                       keyboardType: TextInputType.phone,
@@ -110,9 +158,82 @@ class _RegisterPageState extends State<RegisterPage> {
                         return null;
                       },
                     ),
+                    SizedBox(height: 16),
+
+                    // Email Field
+                    TextFormField(
+                      controller: emailController,
+                      keyboardType: TextInputType.emailAddress,
+                      decoration: InputDecoration(
+                        labelText: "Email",
+                        prefixIcon: Icon(Icons.email),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        filled: true,
+                        fillColor: Colors.white,
+                      ),
+                      validator: (value) {
+                        if (value == null || value.isEmpty) {
+                          return 'Please enter email';
+                        }
+                        final emailRegex = RegExp(
+                          r"^[^@\s]+@[^@\s]+\.[^@\s]+$",
+                        );
+                        if (!emailRegex.hasMatch(value)) {
+                          return 'Enter a valid email';
+                        }
+                        return null;
+                      },
+                    ),
+                    SizedBox(height: 16),
+
+                    // Login ID Field
+                    TextFormField(
+                      controller: loginIdController,
+                      decoration: InputDecoration(
+                        labelText: "Login ID",
+                        prefixIcon: Icon(Icons.account_circle),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        filled: true,
+                        fillColor: Colors.white,
+                      ),
+                      validator: (value) {
+                        if (value == null || value.isEmpty) {
+                          return 'Please enter a login id';
+                        }
+                        return null;
+                      },
+                    ),
+                    SizedBox(height: 16),
+
+                    // Password Field
+                    TextFormField(
+                      controller: passwordController,
+                      obscureText: true,
+                      decoration: InputDecoration(
+                        labelText: "Password",
+                        prefixIcon: Icon(Icons.lock),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        filled: true,
+                        fillColor: Colors.white,
+                      ),
+                      validator: (value) {
+                        if (value == null ||
+                            value.isEmpty ||
+                            value.length < 6) {
+                          return 'Password must be at least 6 characters';
+                        }
+                        return null;
+                      },
+                    ),
                     SizedBox(height: 32),
 
-                    // ✅ Submit Button
+                    // Submit Button
                     SizedBox(
                       width: double.infinity,
                       child: ElevatedButton(
@@ -128,7 +249,10 @@ class _RegisterPageState extends State<RegisterPage> {
                             ? CircularProgressIndicator(color: Colors.white)
                             : Text(
                                 "Register",
-                                style: TextStyle(fontSize: 18, color: Colors.white),
+                                style: TextStyle(
+                                  fontSize: 18,
+                                  color: Colors.white,
+                                ),
                               ),
                       ),
                     ),

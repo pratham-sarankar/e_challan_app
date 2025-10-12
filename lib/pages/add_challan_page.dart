@@ -1,8 +1,11 @@
 import 'dart:io';
 
 import 'package:flutter/material.dart';
-import 'package:image_cropper/image_cropper.dart';
+import 'package:geolocator/geolocator.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:municipal_e_challan/models/challan_response.dart';
+import 'package:municipal_e_challan/models/challan_type.dart';
+import 'package:municipal_e_challan/services/api_services.dart';
 import 'package:permission_handler/permission_handler.dart';
 
 import 'dashboard_page.dart';
@@ -19,28 +22,164 @@ class _AddChallanPageState extends State<AddChallanPage> {
   final _formKey = GlobalKey<FormState>();
   final nameController = TextEditingController();
   final mobileController = TextEditingController();
-  final addressController = TextEditingController();
   final amountController = TextEditingController();
   final notesController = TextEditingController();
+  final wardController = TextEditingController();
   List<File> images = [];
+  final ApiService _api_service = ApiService();
+  bool _isSubmitting = false;
+  List<ChallanType> _challanTypes = [];
+  bool _isLoadingTypes = false;
+  double? _latitude;
+  double? _longitude;
 
-  final List<Map<String, String>> rulesInfo = [
-    {"rule": "C&D वेस्ट का सड़क पर निष्कासन(2000)", "amount": "2000"},
-    {"rule": "हरा/नीला/लाल डस्टबिन न रखना(500)", "amount": "500"},
-    {"rule": "फुटपाथ पर गुमठी/ठेला लगाना (1000)", "amount": "1000"},
-    {"rule": "प्रतिबंधित प्लास्टिक का प्रयोग(1500)", "amount": "1500"},
-    {"rule": "बिना अनुमति व्यापार(2500)", "amount": "2500"},
-  ];
+  // (rulesInfo removed — dropdown driven only by server)
 
-  String? selectedRule;
+  // Unselected by default; holds the chosen ChallanType from API
+  ChallanType? _selectedType;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadChallanTypes();
+    _determinePosition();
+  }
+
+  Future<void> _determinePosition() async {
+    try {
+      bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
+      if (!serviceEnabled) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'Location services are disabled. Please enable them.',
+            ),
+          ),
+        );
+        return;
+      }
+
+      LocationPermission permission = await Geolocator.checkPermission();
+      if (permission == LocationPermission.denied) {
+        permission = await Geolocator.requestPermission();
+        if (permission == LocationPermission.denied) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Location permissions are denied')),
+          );
+          return;
+        }
+      }
+
+      if (permission == LocationPermission.deniedForever) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'Location permissions are permanently denied. Please enable from settings.',
+            ),
+          ),
+        );
+        return;
+      }
+
+      final pos = await Geolocator.getCurrentPosition(
+        desiredAccuracy: LocationAccuracy.high,
+      );
+      setState(() {
+        _latitude = pos.latitude;
+        _longitude = pos.longitude;
+      });
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to get location: ${e.toString()}')),
+      );
+    }
+  }
+
+  Future<void> _loadChallanTypes() async {
+    setState(() => _isLoadingTypes = true);
+    try {
+      final types = await _api_service.getChallanTypes();
+      // Debug: log loaded types
+      print('[AddChallanPage] loaded challan types count=${types.length}');
+      for (final t in types)
+        print('[AddChallanPage] type=${t.typeName} fine=${t.fineAmount}');
+      setState(() {
+        _challanTypes = types;
+      });
+      // Quick runtime confirmation so testers/devs can see the parsed fine amount.
+      if (mounted && _challanTypes.isNotEmpty) {
+        final first = _challanTypes.first;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'Loaded ${_challanTypes.length} types. First: ${first.typeName} — ₹${first.fineAmount}',
+            ),
+            duration: Duration(seconds: 2),
+          ),
+        );
+
+        // If the server returns exactly one challan type, auto-select it to
+        // make the UI explicit and populate the fine amount.
+        if (_challanTypes.length == 1 && _selectedType == null) {
+          setState(() {
+            _selectedType = first;
+            amountController.text = first.fineAmount.toString();
+          });
+        }
+      }
+      // If a type was previously selected, try to rebind it to the newly-loaded list
+      if (_selectedType != null) {
+        final selName = _selectedType!.typeName.trim().toLowerCase();
+        try {
+          final restored = _challanTypes.firstWhere(
+            (t) => t.typeName.trim().toLowerCase() == selName,
+          );
+          setState(() {
+            _selectedType = restored;
+            amountController.text = restored.fineAmount.toString();
+          });
+          if (mounted)
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text(
+                  'Restored previously selected type: ${restored.typeName}',
+                ),
+              ),
+            );
+        } catch (_) {
+          // previously selected type not present in new list; clear selection
+          setState(() {
+            _selectedType = null;
+            amountController.clear();
+          });
+          if (mounted)
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text('Previously selected type not found in new list'),
+              ),
+            );
+        }
+      }
+    } catch (e) {
+      // show a small UI message so developers/testers know fetching failed
+      if (mounted)
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to load challan types: ${e.toString()}'),
+          ),
+        );
+    } finally {
+      if (mounted) setState(() => _isLoadingTypes = false);
+    }
+  }
 
   @override
   void dispose() {
     nameController.dispose();
     mobileController.dispose();
-    addressController.dispose();
     amountController.dispose();
     notesController.dispose();
+    wardController.dispose();
     super.dispose();
   }
 
@@ -63,169 +202,263 @@ class _AddChallanPageState extends State<AddChallanPage> {
 
     final pickedFile = await ImagePicker().pickImage(source: source);
     if (pickedFile != null) {
-      CroppedFile? croppedFile = await ImageCropper().cropImage(
-        sourcePath: pickedFile.path,
-        uiSettings: [
-          AndroidUiSettings(toolbarTitle: 'Crop Image', lockAspectRatio: false),
-          IOSUiSettings(title: 'Crop Image', aspectRatioLockEnabled: false),
-        ],
-      );
-      if (croppedFile != null) {
-        setState(() {
-          images.add(File(croppedFile.path));
-        });
-      }
+      // Add the picked file directly without launching an additional crop screen
+      setState(() {
+        images.add(File(pickedFile.path));
+      });
     }
   }
 
-  void submitChallan() {
+  Future<void> submitChallan() async {
     if (!_formKey.currentState!.validate()) {
       return;
     }
 
-    DashboardPage.challans.add({
-      "name": nameController.text,
-      "mobile": mobileController.text,
-      "address": addressController.text,
-      "rule": selectedRule,
-      "amount": amountController.text,
-      "notes": notesController.text,
-      "images": images,
-      "status": "Unpaid",
-    });
+    // Ensure we have a location before submitting
+    if (_latitude == null || _longitude == null) {
+      await _determinePosition();
+      if (_latitude == null || _longitude == null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'Unable to get location. Please ensure location is enabled and try again.',
+            ),
+          ),
+        );
+        return;
+      }
+    }
 
-    showDialog(
-      context: context,
-      builder: (_) => Dialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        // Removing FadeInUp animation from here
-        child: Padding(
-          padding: const EdgeInsets.all(20.0),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // Header Row - Make it flexible
-              Row(
-                children: [
-                  Container(
-                    padding: EdgeInsets.all(8),
-                    decoration: BoxDecoration(
-                      color: Colors.green.withOpacity(0.1),
-                      shape: BoxShape.circle,
-                    ),
-                    child: Icon(
-                      Icons.check_circle,
-                      color: Colors.green,
-                      size: 28,
-                    ),
-                  ),
-                  SizedBox(width: 12),
-                  Expanded(
-                    // Wrap the text in Expanded
-                    child: Text(
-                      "Challan Issued Successfully",
-                      style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-              SizedBox(height: 16),
-              Text(
-                "Your challan has been recorded successfully. You can make the payment now or later from your dashboard.",
-                style: Theme.of(
-                  context,
-                ).textTheme.bodyMedium?.copyWith(color: Colors.grey[700]),
-              ),
-              SizedBox(height: 24),
+    final fullName = nameController.text.trim();
+    final contactNumber = mobileController.text.trim();
+    final challanName = _selectedType?.typeName ?? 'Violation';
 
-              Row(
-                children: [
-                  Expanded(
-                    child: TextButton(
-                      style: TextButton.styleFrom(
-                        padding: EdgeInsets.symmetric(vertical: 12),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                      ),
-                      onPressed: () {
-                        Navigator.pop(context);
-                        Navigator.pop(context);
-                      },
-                      child: Text(
-                        "PAY LATER",
-                        style: TextStyle(
-                          color: Colors.grey[700],
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                    ),
-                  ),
-                  SizedBox(width: 12),
-                  Expanded(
-                    child: ElevatedButton(
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.green,
-                        padding: EdgeInsets.symmetric(vertical: 12),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                      ),
-                      onPressed: () {
-                        Navigator.pop(context);
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (_) => PaymentPage(
-                              index: DashboardPage.challans.length - 1,
-                            ),
-                          ),
-                        );
-                      },
-                      child: Text(
-                        "PAY NOW",
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ],
+    // Require server-provided challan types — do not fall back to static rules
+    if (_challanTypes.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Challan types not loaded from server. Please try again.',
           ),
         ),
-      ),
-    );
-  }
-
-  void _updateFineAmount(String? selectedRuleValue) {
-    if (selectedRuleValue == null) {
-      amountController.clear();
+      );
+      setState(() => _isSubmitting = false);
       return;
     }
 
-    final selectedRuleData = rulesInfo.firstWhere(
-      (ruleMap) => ruleMap["rule"] == selectedRuleValue,
-      orElse: () => {},
-    );
+    // Ensure a challan type from server is selected
+    if (_selectedType == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Please select a rule violation from the list')),
+      );
+      setState(() => _isSubmitting = false);
+      return;
+    }
 
-    if (selectedRuleData.isNotEmpty) {
-      amountController.text = selectedRuleData["amount"] ?? "";
+    final ChallanType matched = _selectedType!;
+    final int challanTypeId = matched.id;
+    // Prefer the user-edited amount if present and numeric; fall back to server fine.
+    int fineAmount;
+    final amtText = amountController.text.trim();
+    if (amtText.isNotEmpty) {
+      final parsed = int.tryParse(amtText);
+      if (parsed == null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Please enter a valid numeric fine amount')),
+        );
+        setState(() => _isSubmitting = false);
+        return;
+      }
+      fineAmount = parsed;
     } else {
-      amountController.clear();
+      fineAmount = matched.fineAmount;
+    }
+    final description = notesController.text.trim();
+    final wardNumber = wardController.text.trim().isNotEmpty
+        ? wardController.text.trim()
+        : '0';
+    final latitude = _latitude ?? 0.0;
+    final longitude = _longitude ?? 0.0;
+
+    setState(() => _isSubmitting = true);
+    try {
+      final ChallanResponse resp = await _api_service.createChallan(
+        fullName: fullName,
+        contactNumber: contactNumber,
+        challanTypeId: challanTypeId,
+        challanName: challanName,
+        fineAmount: fineAmount,
+        description: description,
+        wardNumber: wardNumber,
+        latitude: latitude,
+        longitude: longitude,
+      );
+
+      // Add to local dashboard list using server response
+      final newChallan = {
+        'id': resp.id,
+        'challan_id': resp.challanId,
+        'name': fullName,
+        'mobile': contactNumber,
+        'latitude': latitude,
+        'longitude': longitude,
+        'rule': challanName,
+        'amount': resp.fineAmount.toString(),
+        'notes': description,
+        'image_urls': resp.imageUrls,
+        'image_count': resp.imageCount,
+        'status': 'Unpaid',
+        'created_at': resp.createdAt,
+      };
+
+      DashboardPage.challans.add(newChallan);
+
+      // If user added images locally, upload them to the server for this challan
+      if (images.isNotEmpty) {
+        try {
+          final uploadData = await _api_service.uploadChallanImages(
+            resp.challanId,
+            images,
+          );
+          // uploadData contains uploaded_files and total_uploaded per API sample
+          newChallan['uploaded_files'] = uploadData['uploaded_files'] ?? [];
+          newChallan['total_uploaded'] =
+              uploadData['total_uploaded'] ??
+              (uploadData['uploaded_files'] as List?)?.length ??
+              0;
+        } catch (uploadErr) {
+          // If image upload fails, show a message but keep the challan created
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                'Challan created but image upload failed: ${uploadErr.toString()}',
+              ),
+            ),
+          );
+        }
+      }
+
+      // Show success dialog (same as before)
+      showDialog(
+        context: context,
+        builder: (_) => Dialog(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+          ),
+          child: Padding(
+            padding: const EdgeInsets.all(20.0),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Container(
+                      padding: EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: Colors.green.withAlpha(26),
+                        shape: BoxShape.circle,
+                      ),
+                      child: Icon(
+                        Icons.check_circle,
+                        color: Colors.green,
+                        size: 28,
+                      ),
+                    ),
+                    SizedBox(width: 12),
+                    Expanded(
+                      child: Text(
+                        "Challan Issued Successfully",
+                        style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                SizedBox(height: 16),
+                Text(
+                  "Your challan has been recorded successfully. You can make the payment now or later from your dashboard.",
+                  style: Theme.of(
+                    context,
+                  ).textTheme.bodyMedium?.copyWith(color: Colors.grey[700]),
+                ),
+                SizedBox(height: 24),
+                Row(
+                  children: [
+                    Expanded(
+                      child: TextButton(
+                        style: TextButton.styleFrom(
+                          padding: EdgeInsets.symmetric(vertical: 12),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                        ),
+                        onPressed: () {
+                          Navigator.pop(context);
+                          Navigator.pop(context);
+                        },
+                        child: Text(
+                          "PAY LATER",
+                          style: TextStyle(
+                            color: Colors.grey[700],
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                    ),
+                    SizedBox(width: 12),
+                    Expanded(
+                      child: ElevatedButton(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.green,
+                          padding: EdgeInsets.symmetric(vertical: 12),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                        ),
+                        onPressed: () {
+                          Navigator.pop(context);
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => PaymentPage(
+                                index: DashboardPage.challans.length - 1,
+                              ),
+                            ),
+                          );
+                        },
+                        child: Text(
+                          "PAY NOW",
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to create challan: ${e.toString()}')),
+      );
+    } finally {
+      if (mounted) setState(() => _isSubmitting = false);
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    final List<String> rulesListText = rulesInfo
-        .map((info) => info["rule"]!)
-        .toList();
+    // Note: amountController is auto-filled when a type is selected (in
+    // onChanged / when types load). We avoid forcing controller updates in
+    // build() so the user can edit the value after selection.
+    // Dropdown uses server-provided `_challanTypes` directly; no local fallback.
 
     return Scaffold(
       appBar: AppBar(title: Text("Issue New Challan"), elevation: 0),
@@ -235,7 +468,7 @@ class _AddChallanPageState extends State<AddChallanPage> {
             begin: Alignment.topCenter,
             end: Alignment.bottomCenter,
             colors: [
-              Theme.of(context).colorScheme.primary.withOpacity(0.05),
+              Theme.of(context).colorScheme.primary.withAlpha(13),
               Theme.of(context).colorScheme.surface,
             ],
           ),
@@ -247,7 +480,6 @@ class _AddChallanPageState extends State<AddChallanPage> {
             child: ListView(
               children: [
                 SizedBox(height: 10),
-                // Removed FadeInDown animation from here
                 TextFormField(
                   controller: nameController,
                   decoration: InputDecoration(
@@ -286,71 +518,121 @@ class _AddChallanPageState extends State<AddChallanPage> {
                   },
                 ),
                 SizedBox(height: 16),
-                TextFormField(
-                  controller: addressController,
-                  decoration: InputDecoration(
-                    labelText: "Address",
-                    prefixIcon: Icon(Icons.location_on_outlined),
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                  ),
-                  maxLines: 2,
-                  /*      validator: (value) {
-                    if (value == null || value.isEmpty) {
-                      return 'Please enter address';
-                    }
-                    return null;
-                  },*/
-                ),
-                SizedBox(height: 16),
-                DropdownButtonFormField<String>(
-                  isExpanded: true,
-                  initialValue: selectedRule,
-                  decoration: InputDecoration(
-                    labelText: "Select Rule Violation",
-                    prefixIcon: Icon(Icons.gavel_outlined),
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                  ),
-                  items: rulesListText
-                      .map(
-                        (rule) => DropdownMenuItem(
-                          value: rule,
-                          child: Text(
-                            rule,
-                            style: TextStyle(fontSize: 14),
-                            overflow: TextOverflow.ellipsis,
-                          ),
+                // Use only API-provided challan types for the dropdown. Show loading/empty UI as needed.
+                if (_isLoadingTypes)
+                  Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 8.0),
+                    child: Row(
+                      children: [
+                        SizedBox(
+                          width: 20,
+                          height: 20,
+                          child: CircularProgressIndicator(strokeWidth: 2),
                         ),
-                      )
-                      .toList(),
-                  onChanged: (value) {
-                    setState(() {
-                      selectedRule = value;
-                      _updateFineAmount(value);
-                    });
-                  },
-                  validator: (value) {
-                    if (value == null || value.isEmpty) {
-                      return 'Please select a rule violation';
-                    }
-                    return null;
-                  },
-                ),
+                        SizedBox(width: 12),
+                        Text('Loading rule violations...'),
+                      ],
+                    ),
+                  )
+                else if (_challanTypes.isEmpty)
+                  // No types from server — inform user and disable submission
+                  Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 8.0),
+                    child: InputDecorator(
+                      decoration: InputDecoration(
+                        labelText: 'Select Rule Violation',
+                        prefixIcon: Icon(Icons.gavel_outlined),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                      ),
+                      child: Text('No rule violations available'),
+                    ),
+                  )
+                else
+                  DropdownButtonFormField<ChallanType>(
+                    isExpanded: true,
+                    // Use initialValue instead of the deprecated `value`.
+                    // Add a key so the FormField is recreated when the selected
+                    // type changes — this ensures the initialValue reflects
+                    // programmatic updates to `_selectedType`.
+                    key: ValueKey(_selectedType?.id ?? 'none'),
+                    initialValue: _selectedType,
+                    decoration: InputDecoration(
+                      labelText: "Select Rule Violation",
+                      prefixIcon: Icon(Icons.gavel_outlined),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      hintText: 'Choose a rule',
+                    ),
+                    items: _challanTypes
+                        .map(
+                          (t) => DropdownMenuItem<ChallanType>(
+                            value: t,
+                            // Only show the type name (no fine amount in dropdown)
+                            child: Text(
+                              t.typeName,
+                              style: TextStyle(fontSize: 14),
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                        )
+                        .toList(),
+                    onChanged: (ChallanType? value) {
+                      setState(() {
+                        _selectedType = value;
+                        if (value != null) {
+                          amountController.text = value.fineAmount.toString();
+                          // Debug log selection
+                          print(
+                            '[AddChallanPage] selected type=${value.typeName} fine=${value.fineAmount}',
+                          );
+                          if (mounted)
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                content: Text(
+                                  'Selected: ${value.typeName} — ₹${value.fineAmount}',
+                                ),
+                                duration: Duration(milliseconds: 900),
+                              ),
+                            );
+                        } else {
+                          amountController.clear();
+                        }
+                      });
+                    },
+                    validator: (value) {
+                      if (value == null) {
+                        return 'Please select a rule violation';
+                      }
+                      return null;
+                    },
+                  ),
                 SizedBox(height: 16),
                 TextFormField(
                   controller: amountController,
+                  // When a server-provided challan type is selected, lock the amount to that
+                  // type's fine and prevent manual edits. If selection is cleared the field
+                  // becomes editable again.
                   decoration: InputDecoration(
                     labelText: "Fine Amount",
-                    prefixIcon: Icon(Icons.currency_rupee),
+                    // Use prefixText so value and symbol align nicely.
+                    prefixText: '₹ ',
+                    prefixStyle: TextStyle(fontWeight: FontWeight.w600),
+                    // Field is editable even when a type is selected; server fine will be
+                    // auto-filled but user can edit it.
                     border: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(12),
                     ),
                   ),
                   keyboardType: TextInputType.number,
-                  // enabled: false,
+                  validator: (value) {
+                    if (value == null || value.isEmpty) {
+                      return 'Please enter fine amount';
+                    }
+                    return null;
+                  },
                 ),
                 SizedBox(height: 16),
                 TextFormField(
@@ -364,132 +646,139 @@ class _AddChallanPageState extends State<AddChallanPage> {
                   ),
                   maxLines: 3,
                 ),
-                /*        SizedBox(height: 24),
-                FadeInDown(
-                  delay: Duration(milliseconds: 600),
-                  duration: Duration(milliseconds: 400),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        "Evidence Photos",
-                        style: Theme.of(context).textTheme.titleMedium
-                            ?.copyWith(fontWeight: FontWeight.bold),
-                      ),
-                      SizedBox(height: 12),
-                      Container(
-                        height: 120,
-                        child: ListView.builder(
-                          scrollDirection: Axis.horizontal,
-                          itemCount: images.length + 1,
-                          itemBuilder: (context, index) {
-                            if (index == images.length) {
-                              return GestureDetector(
-                                onTap: () {
-                                  showModalBottomSheet(
-                                    context: context,
-                                    shape: RoundedRectangleBorder(
-                                      borderRadius: BorderRadius.vertical(
-                                        top: Radius.circular(20),
-                                      ),
-                                    ),
-                                    builder: (context) => Container(
-                                      padding: EdgeInsets.all(20),
-                                      child: Column(
-                                        mainAxisSize: MainAxisSize.min,
-                                        children: [
-                                          ListTile(
-                                            leading: Icon(Icons.camera_alt),
-                                            title: Text("Take Photo"),
-                                            onTap: () {
-                                              Navigator.pop(context);
-                                              pickImage(ImageSource.camera);
-                                            },
-                                          ),
-                                          ListTile(
-                                            leading: Icon(Icons.photo_library),
-                                            title: Text("Choose from Gallery"),
-                                            onTap: () {
-                                              Navigator.pop(context);
-                                              pickImage(ImageSource.gallery);
-                                            },
-                                          ),
-                                        ],
-                                      ),
-                                    ),
-                                  );
-                                },
-                                child: Container(
-                                  width: 100,
-                                  margin: EdgeInsets.only(right: 12),
-                                  decoration: BoxDecoration(
-                                    color: Theme.of(
-                                      context,
-                                    ).colorScheme.primary.withOpacity(0.1),
-                                    borderRadius: BorderRadius.circular(12),
-                                    border: Border.all(
-                                      color: Theme.of(
-                                        context,
-                                      ).colorScheme.primary.withOpacity(0.3),
-                                    ),
-                                  ),
-                                  child: Icon(
-                                    Icons.add_photo_alternate_outlined,
-                                    color: Theme.of(
-                                      context,
-                                    ).colorScheme.primary,
-                                    size: 32,
-                                  ),
-                                ),
-                              );
-                            }
-                            return Stack(
-                              children: [
-                                Container(
-                                  width: 100,
-                                  margin: EdgeInsets.only(right: 12),
-                                  decoration: BoxDecoration(
-                                    borderRadius: BorderRadius.circular(12),
-                                    image: DecorationImage(
-                                      image: FileImage(images[index]),
-                                      fit: BoxFit.cover,
-                                    ),
-                                  ),
-                                ),
-                                Positioned(
-                                  top: 4,
-                                  right: 16,
-                                  child: GestureDetector(
-                                    onTap: () {
-                                      setState(() {
-                                        images.removeAt(index);
-                                      });
-                                    },
-                                    child: Container(
-                                      padding: EdgeInsets.all(4),
-                                      decoration: BoxDecoration(
-                                        color: Colors.red,
-                                        shape: BoxShape.circle,
-                                      ),
-                                      child: Icon(
-                                        Icons.close,
-                                        color: Colors.white,
-                                        size: 16,
-                                      ),
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            );
-                          },
-                        ),
-                      ),
-                    ],
+                SizedBox(height: 16),
+                TextFormField(
+                  controller: wardController,
+                  decoration: InputDecoration(
+                    labelText: "Ward Number (Optional)",
+                    prefixIcon: Icon(Icons.local_police_outlined),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
                   ),
-                ),*/
+                  keyboardType: TextInputType.number,
+                ),
+                SizedBox(height: 24),
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      "Evidence Photos",
+                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    SizedBox(height: 12),
+                    Container(
+                      height: 120,
+                      child: ListView.builder(
+                        scrollDirection: Axis.horizontal,
+                        itemCount: images.length + 1,
+                        itemBuilder: (context, index) {
+                          if (index == images.length) {
+                            return GestureDetector(
+                              onTap: () {
+                                showModalBottomSheet(
+                                  context: context,
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.vertical(
+                                      top: Radius.circular(20),
+                                    ),
+                                  ),
+                                  builder: (context) => Container(
+                                    padding: EdgeInsets.all(20),
+                                    child: Column(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        ListTile(
+                                          leading: Icon(Icons.camera_alt),
+                                          title: Text("Take Photo"),
+                                          onTap: () {
+                                            Navigator.pop(context);
+                                            pickImage(ImageSource.camera);
+                                          },
+                                        ),
+                                        ListTile(
+                                          leading: Icon(Icons.photo_library),
+                                          title: Text("Choose from Gallery"),
+                                          onTap: () {
+                                            Navigator.pop(context);
+                                            pickImage(ImageSource.gallery);
+                                          },
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                );
+                              },
+                              child: Container(
+                                width: 100,
+                                margin: EdgeInsets.only(right: 12),
+                                decoration: BoxDecoration(
+                                  color: Theme.of(
+                                    context,
+                                  ).colorScheme.primary.withAlpha(26),
+                                  borderRadius: BorderRadius.circular(12),
+                                  border: Border.all(
+                                    color: Theme.of(
+                                      context,
+                                    ).colorScheme.primary.withAlpha(77),
+                                  ),
+                                ),
+                                child: Icon(
+                                  Icons.add_photo_alternate_outlined,
+                                  color: Theme.of(context).colorScheme.primary,
+                                  size: 32,
+                                ),
+                              ),
+                            );
+                          }
+                          return Stack(
+                            children: [
+                              Container(
+                                width: 100,
+                                margin: EdgeInsets.only(right: 12),
+                                decoration: BoxDecoration(
+                                  borderRadius: BorderRadius.circular(12),
+                                  image: DecorationImage(
+                                    image: FileImage(images[index]),
+                                    fit: BoxFit.cover,
+                                  ),
+                                ),
+                              ),
+                              Positioned(
+                                top: 4,
+                                right: 16,
+                                child: GestureDetector(
+                                  onTap: () {
+                                    setState(() {
+                                      images.removeAt(index);
+                                    });
+                                  },
+                                  child: Container(
+                                    padding: EdgeInsets.all(4),
+                                    decoration: BoxDecoration(
+                                      color: Colors.red,
+                                      shape: BoxShape.circle,
+                                    ),
+                                    child: Icon(
+                                      Icons.close,
+                                      color: Colors.white,
+                                      size: 16,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ],
+                          );
+                        },
+                      ),
+                    ),
+                  ],
+                ),
                 SizedBox(height: 24),
                 ElevatedButton(
-                  onPressed: submitChallan,
+                  onPressed: _isSubmitting ? null : submitChallan,
                   style: ElevatedButton.styleFrom(
                     padding: EdgeInsets.symmetric(vertical: 16),
                     shape: RoundedRectangleBorder(
@@ -497,7 +786,7 @@ class _AddChallanPageState extends State<AddChallanPage> {
                     ),
                   ),
                   child: Text(
-                    "ISSUE CHALLAN",
+                    _isSubmitting ? "Submitting..." : "ISSUE CHALLAN",
                     style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
                   ),
                 ),

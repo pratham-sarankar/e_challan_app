@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
-
-import 'login_page.dart';
+import 'package:municipal_e_challan/pages/dashboard_page.dart';
+import 'package:municipal_e_challan/pages/login_page.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
@@ -49,11 +50,24 @@ class _SplashScreenState extends State<SplashScreen>
 
     _controller.forward();
 
-    Future.delayed(Duration(seconds: 3), () {
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(builder: (context) => LoginPage()),
-      );
+    // After the splash, check for saved access token and navigate accordingly
+    Future.delayed(Duration(seconds: 3), () async {
+      final prefs = await SharedPreferences.getInstance();
+      final token = prefs.getString('access_token');
+      if (token != null && token.isNotEmpty) {
+        // Token exists -> navigate to dashboard
+        if (!mounted) return;
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (context) => DashboardPage()),
+        );
+      } else {
+        if (!mounted) return;
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (context) => LoginPage()),
+        );
+      }
     });
   }
 
