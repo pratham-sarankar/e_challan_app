@@ -1,84 +1,78 @@
 import 'package:flutter/material.dart';
+import 'package:municipal_e_challan/services/api_services.dart';
 import 'dashboard_page.dart';
 
 class OtpVerificationPage extends StatefulWidget {
-  final String name;
-  final String mobile;
+  final String mobileNumber;
 
-  const OtpVerificationPage({
-    super.key,
-    required this.name,
-    required this.mobile,
-  });
+  const OtpVerificationPage({super.key, required this.mobileNumber});
 
   @override
   _OtpVerificationPageState createState() => _OtpVerificationPageState();
 }
 
 class _OtpVerificationPageState extends State<OtpVerificationPage> {
-  TextEditingController otpController = TextEditingController();
+  final otpController = TextEditingController();
+  final ApiService apiService = ApiService();
+  bool isLoading = false;
 
-  void verifyOtp() {
-    if (otpController.text == '1234') {
-      // ✅ Hardcoded dummy OTP
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(builder: (_) => DashboardPage()),
-      );
-    } else {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text("Invalid OTP")));
+  void verifyOtp() async {
+    if (otpController.text.isNotEmpty) {
+      setState(() => isLoading = true);
+      try {
+        final token = await apiService.verifyOtp(widget.mobileNumber, otpController.text);
+        // You can save the token for future authenticated requests
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (_) => DashboardPage()),
+        );
+      } catch (e) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to verify OTP: ${e.toString()}')),
+        );
+      }
+      setState(() => isLoading = false);
     }
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.grey[100],
+      backgroundColor: Theme.of(context).colorScheme.surface,
       body: Center(
-        child: Padding(
+        child: SingleChildScrollView(
           padding: EdgeInsets.all(24),
           child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
             children: [
+              Image.asset('assets/images/clean_city.png', height: 200),
+              SizedBox(height: 24),
               Text(
                 "OTP Verification",
                 style: TextStyle(
-                  fontSize: 24,
+                  fontSize: 26,
                   fontWeight: FontWeight.bold,
                   color: Colors.blue.shade800,
                 ),
               ),
-              SizedBox(height: 24),
-              Text("Enter OTP sent to ${widget.mobile}"),
               SizedBox(height: 16),
+              Text("Enter the OTP sent to ${widget.mobileNumber}"),
+              SizedBox(height: 32),
               TextField(
                 controller: otpController,
                 keyboardType: TextInputType.number,
                 decoration: InputDecoration(
                   labelText: "Enter OTP",
                   prefixIcon: Icon(Icons.lock),
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  filled: true,
-                  fillColor: Colors.white,
                 ),
               ),
               SizedBox(height: 32),
               SizedBox(
                 width: double.infinity,
                 child: ElevatedButton(
-                  onPressed: verifyOtp,
-                  style: ElevatedButton.styleFrom(
-                    padding: EdgeInsets.symmetric(vertical: 16),
-                    backgroundColor: Colors.blue.shade700,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                  ),
-                  child: Text("Verify OTP", style: TextStyle(fontSize: 18)),
+                  onPressed: isLoading ? null : verifyOtp,
+                  child: isLoading
+                      ? CircularProgressIndicator(color: Colors.white)
+                      : Text("Verify OTP"),
                 ),
               ),
             ],

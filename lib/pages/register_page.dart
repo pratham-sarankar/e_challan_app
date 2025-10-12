@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
-import 'otp_verification_page.dart';
+import 'package:municipal_e_challan/services/api_services.dart';
+
 import 'login_page.dart'; // Import login page
 
 class RegisterPage extends StatefulWidget {
@@ -11,28 +12,39 @@ class RegisterPage extends StatefulWidget {
 
 class _RegisterPageState extends State<RegisterPage> {
   final _formKey = GlobalKey<FormState>();
-  TextEditingController nameController = TextEditingController();
+  TextEditingController fullNameController = TextEditingController();
   TextEditingController mobileController = TextEditingController();
+  final ApiService apiService = ApiService();
+  bool isLoading = false;
 
-  void submitRegistration() {
+  void submitRegistration() async {
     if (_formKey.currentState!.validate()) {
-      // ✅ Navigate to OTP page
-      Navigator.push(
-        context,
-        MaterialPageRoute(
-          builder: (_) => OtpVerificationPage(
-            name: nameController.text,
-            mobile: mobileController.text,
-          ),
-        ),
-      );
+      setState(() => isLoading = true);
+      try {
+        await apiService.registerOfficer(
+          fullNameController.text,
+          mobileController.text,
+        );
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Registration successful! Please login.')),
+        );
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (_) => LoginPage()),
+        );
+      } catch (e) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to register: ${e.toString()}')),
+        );
+      }
+      setState(() => isLoading = false);
     }
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.grey[100],
+      backgroundColor: Theme.of(context).colorScheme.surface,
       body: Center(
         child: SingleChildScrollView(
           padding: EdgeInsets.all(24),
@@ -57,7 +69,7 @@ class _RegisterPageState extends State<RegisterPage> {
                   children: [
                     // ✅ Name Field
                     TextFormField(
-                      controller: nameController,
+                      controller: fullNameController,
                       decoration: InputDecoration(
                         labelText: "Full Name",
                         prefixIcon: Icon(Icons.person),
@@ -69,7 +81,7 @@ class _RegisterPageState extends State<RegisterPage> {
                       ),
                       validator: (value) {
                         if (value == null || value.isEmpty) {
-                          return 'Please enter your name';
+                          return 'Please enter your full name';
                         }
                         return null;
                       },
@@ -104,7 +116,7 @@ class _RegisterPageState extends State<RegisterPage> {
                     SizedBox(
                       width: double.infinity,
                       child: ElevatedButton(
-                        onPressed: submitRegistration,
+                        onPressed: isLoading ? null : submitRegistration,
                         style: ElevatedButton.styleFrom(
                           padding: EdgeInsets.symmetric(vertical: 16),
                           backgroundColor: Colors.blue.shade700,
@@ -112,10 +124,12 @@ class _RegisterPageState extends State<RegisterPage> {
                             borderRadius: BorderRadius.circular(10),
                           ),
                         ),
-                        child: Text(
-                          "Register & Verify OTP",
-                          style: TextStyle(fontSize: 18, color: Colors.white),
-                        ),
+                        child: isLoading
+                            ? CircularProgressIndicator(color: Colors.white)
+                            : Text(
+                                "Register",
+                                style: TextStyle(fontSize: 18, color: Colors.white),
+                              ),
                       ),
                     ),
                     SizedBox(height: 24),

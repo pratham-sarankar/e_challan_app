@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+
 import 'login_page.dart';
 
 class SplashScreen extends StatefulWidget {
@@ -51,17 +52,7 @@ class _SplashScreenState extends State<SplashScreen>
     Future.delayed(Duration(seconds: 3), () {
       Navigator.pushReplacement(
         context,
-        PageRouteBuilder(
-          pageBuilder: (context, animation, secondaryAnimation) => LoginPage(),
-          transitionsBuilder: (context, animation, secondaryAnimation, child) {
-            var fadeTransition = FadeTransition(
-              opacity: animation,
-              child: child,
-            );
-            return fadeTransition;
-          },
-          transitionDuration: Duration(milliseconds: 800),
-        ),
+        MaterialPageRoute(builder: (context) => LoginPage()),
       );
     });
   }

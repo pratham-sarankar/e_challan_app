@@ -1,11 +1,12 @@
-import 'package:flutter/material.dart';
-import 'package:image_picker/image_picker.dart';
-import 'package:image_cropper/image_cropper.dart';
-import 'package:animate_do/animate_do.dart';
 import 'dart:io';
+
+import 'package:flutter/material.dart';
+import 'package:image_cropper/image_cropper.dart';
+import 'package:image_picker/image_picker.dart';
+import 'package:permission_handler/permission_handler.dart';
+
 import 'dashboard_page.dart';
 import 'payment_page.dart';
-import 'package:permission_handler/permission_handler.dart';
 
 class AddChallanPage extends StatefulWidget {
   const AddChallanPage({super.key});
@@ -97,107 +98,105 @@ class _AddChallanPageState extends State<AddChallanPage> {
       context: context,
       builder: (_) => Dialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        child: FadeInUp(
-          duration: Duration(milliseconds: 400),
-          child: Padding(
-            padding: const EdgeInsets.all(20.0),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // Header Row - Make it flexible
-                Row(
-                  children: [
-                    Container(
-                      padding: EdgeInsets.all(8),
-                      decoration: BoxDecoration(
-                        color: Colors.green.withOpacity(0.1),
-                        shape: BoxShape.circle,
-                      ),
-                      child: Icon(
-                        Icons.check_circle,
-                        color: Colors.green,
-                        size: 28,
+        // Removing FadeInUp animation from here
+        child: Padding(
+          padding: const EdgeInsets.all(20.0),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Header Row - Make it flexible
+              Row(
+                children: [
+                  Container(
+                    padding: EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: Colors.green.withOpacity(0.1),
+                      shape: BoxShape.circle,
+                    ),
+                    child: Icon(
+                      Icons.check_circle,
+                      color: Colors.green,
+                      size: 28,
+                    ),
+                  ),
+                  SizedBox(width: 12),
+                  Expanded(
+                    // Wrap the text in Expanded
+                    child: Text(
+                      "Challan Issued Successfully",
+                      style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                        fontWeight: FontWeight.bold,
                       ),
                     ),
-                    SizedBox(width: 12),
-                    Expanded(
-                      // Wrap the text in Expanded
+                  ),
+                ],
+              ),
+              SizedBox(height: 16),
+              Text(
+                "Your challan has been recorded successfully. You can make the payment now or later from your dashboard.",
+                style: Theme.of(
+                  context,
+                ).textTheme.bodyMedium?.copyWith(color: Colors.grey[700]),
+              ),
+              SizedBox(height: 24),
+
+              Row(
+                children: [
+                  Expanded(
+                    child: TextButton(
+                      style: TextButton.styleFrom(
+                        padding: EdgeInsets.symmetric(vertical: 12),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                      ),
+                      onPressed: () {
+                        Navigator.pop(context);
+                        Navigator.pop(context);
+                      },
                       child: Text(
-                        "Challan Issued Successfully",
-                        style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                        "PAY LATER",
+                        style: TextStyle(
+                          color: Colors.grey[700],
                           fontWeight: FontWeight.bold,
                         ),
                       ),
                     ),
-                  ],
-                ),
-                SizedBox(height: 16),
-                Text(
-                  "Your challan has been recorded successfully. You can make the payment now or later from your dashboard.",
-                  style: Theme.of(
-                    context,
-                  ).textTheme.bodyMedium?.copyWith(color: Colors.grey[700]),
-                ),
-                SizedBox(height: 24),
-
-                Row(
-                  children: [
-                    Expanded(
-                      child: TextButton(
-                        style: TextButton.styleFrom(
-                          padding: EdgeInsets.symmetric(vertical: 12),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                        ),
-                        onPressed: () {
-                          Navigator.pop(context);
-                          Navigator.pop(context);
-                        },
-                        child: Text(
-                          "PAY LATER",
-                          style: TextStyle(
-                            color: Colors.grey[700],
-                            fontWeight: FontWeight.bold,
-                          ),
+                  ),
+                  SizedBox(width: 12),
+                  Expanded(
+                    child: ElevatedButton(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.green,
+                        padding: EdgeInsets.symmetric(vertical: 12),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(8),
                         ),
                       ),
-                    ),
-                    SizedBox(width: 12),
-                    Expanded(
-                      child: ElevatedButton(
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.green,
-                          padding: EdgeInsets.symmetric(vertical: 12),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                        ),
-                        onPressed: () {
-                          Navigator.pop(context);
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (_) => PaymentPage(
-                                index: DashboardPage.challans.length - 1,
-                              ),
+                      onPressed: () {
+                        Navigator.pop(context);
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => PaymentPage(
+                              index: DashboardPage.challans.length - 1,
                             ),
-                          );
-                        },
-                        child: Text(
-                          "PAY NOW",
-                          style: TextStyle(
-                            color: Colors.white,
-                            fontWeight: FontWeight.bold,
                           ),
+                        );
+                      },
+                      child: Text(
+                        "PAY NOW",
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.bold,
                         ),
                       ),
                     ),
-                  ],
-                ),
-              ],
-            ),
+                  ),
+                ],
+              ),
+            ],
           ),
         ),
       ),
@@ -248,144 +247,122 @@ class _AddChallanPageState extends State<AddChallanPage> {
             child: ListView(
               children: [
                 SizedBox(height: 10),
-                FadeInDown(
-                  duration: Duration(milliseconds: 400),
-                  child: TextFormField(
-                    controller: nameController,
-                    decoration: InputDecoration(
-                      labelText: "Violator Name",
-                      prefixIcon: Icon(Icons.person_outline),
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
+                // Removed FadeInDown animation from here
+                TextFormField(
+                  controller: nameController,
+                  decoration: InputDecoration(
+                    labelText: "Violator Name",
+                    prefixIcon: Icon(Icons.person_outline),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
                     ),
-                    validator: (value) {
-                      if (value == null || value.isEmpty) {
-                        return 'Please enter violator name';
-                      }
-                      return null;
-                    },
                   ),
+                  validator: (value) {
+                    if (value == null || value.isEmpty) {
+                      return 'Please enter violator name';
+                    }
+                    return null;
+                  },
                 ),
                 SizedBox(height: 16),
-                FadeInDown(
-                  delay: Duration(milliseconds: 100),
-                  duration: Duration(milliseconds: 400),
-                  child: TextFormField(
-                    controller: mobileController,
-                    decoration: InputDecoration(
-                      labelText: "Mobile Number",
-                      prefixIcon: Icon(Icons.phone_outlined),
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
+                TextFormField(
+                  controller: mobileController,
+                  decoration: InputDecoration(
+                    labelText: "Mobile Number",
+                    prefixIcon: Icon(Icons.phone_outlined),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
                     ),
-                    keyboardType: TextInputType.phone,
-                    validator: (value) {
-                      if (value == null || value.isEmpty) {
-                        return 'Please enter mobile number';
-                      }
-                      if (value.length != 10) {
-                        return 'Please enter valid 10-digit mobile number';
-                      }
-                      return null;
-                    },
                   ),
+                  keyboardType: TextInputType.phone,
+                  validator: (value) {
+                    if (value == null || value.isEmpty) {
+                      return 'Please enter mobile number';
+                    }
+                    if (value.length != 10) {
+                      return 'Please enter valid 10-digit mobile number';
+                    }
+                    return null;
+                  },
                 ),
                 SizedBox(height: 16),
-                FadeInDown(
-                  delay: Duration(milliseconds: 200),
-                  duration: Duration(milliseconds: 400),
-                  child: TextFormField(
-                    controller: addressController,
-                    decoration: InputDecoration(
-                      labelText: "Address",
-                      prefixIcon: Icon(Icons.location_on_outlined),
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
+                TextFormField(
+                  controller: addressController,
+                  decoration: InputDecoration(
+                    labelText: "Address",
+                    prefixIcon: Icon(Icons.location_on_outlined),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
                     ),
-                    maxLines: 2,
-                    /*      validator: (value) {
-                      if (value == null || value.isEmpty) {
-                        return 'Please enter address';
-                      }
-                      return null;
-                    },*/
                   ),
+                  maxLines: 2,
+                  /*      validator: (value) {
+                    if (value == null || value.isEmpty) {
+                      return 'Please enter address';
+                    }
+                    return null;
+                  },*/
                 ),
                 SizedBox(height: 16),
-                FadeInDown(
-                  delay: Duration(milliseconds: 300),
-                  duration: Duration(milliseconds: 400),
-                  child: DropdownButtonFormField<String>(
-                    isExpanded: true,
-                    initialValue: selectedRule,
-                    decoration: InputDecoration(
-                      labelText: "Select Rule Violation",
-                      prefixIcon: Icon(Icons.gavel_outlined),
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
+                DropdownButtonFormField<String>(
+                  isExpanded: true,
+                  initialValue: selectedRule,
+                  decoration: InputDecoration(
+                    labelText: "Select Rule Violation",
+                    prefixIcon: Icon(Icons.gavel_outlined),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
                     ),
-                    items: rulesListText
-                        .map(
-                          (rule) => DropdownMenuItem(
-                            value: rule,
-                            child: Text(
-                              rule,
-                              style: TextStyle(fontSize: 14),
-                              overflow: TextOverflow.ellipsis,
-                            ),
+                  ),
+                  items: rulesListText
+                      .map(
+                        (rule) => DropdownMenuItem(
+                          value: rule,
+                          child: Text(
+                            rule,
+                            style: TextStyle(fontSize: 14),
+                            overflow: TextOverflow.ellipsis,
                           ),
-                        )
-                        .toList(),
-                    onChanged: (value) {
-                      setState(() {
-                        selectedRule = value;
-                        _updateFineAmount(value);
-                      });
-                    },
-                    validator: (value) {
-                      if (value == null || value.isEmpty) {
-                        return 'Please select a rule violation';
-                      }
-                      return null;
-                    },
-                  ),
+                        ),
+                      )
+                      .toList(),
+                  onChanged: (value) {
+                    setState(() {
+                      selectedRule = value;
+                      _updateFineAmount(value);
+                    });
+                  },
+                  validator: (value) {
+                    if (value == null || value.isEmpty) {
+                      return 'Please select a rule violation';
+                    }
+                    return null;
+                  },
                 ),
                 SizedBox(height: 16),
-                FadeInDown(
-                  delay: Duration(milliseconds: 400),
-                  duration: Duration(milliseconds: 400),
-                  child: TextFormField(
-                    controller: amountController,
-                    decoration: InputDecoration(
-                      labelText: "Fine Amount",
-                      prefixIcon: Icon(Icons.currency_rupee),
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
+                TextFormField(
+                  controller: amountController,
+                  decoration: InputDecoration(
+                    labelText: "Fine Amount",
+                    prefixIcon: Icon(Icons.currency_rupee),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
                     ),
-                    keyboardType: TextInputType.number,
-                    // enabled: false,
                   ),
+                  keyboardType: TextInputType.number,
+                  // enabled: false,
                 ),
                 SizedBox(height: 16),
-                FadeInDown(
-                  delay: Duration(milliseconds: 500),
-                  duration: Duration(milliseconds: 400),
-                  child: TextFormField(
-                    controller: notesController,
-                    decoration: InputDecoration(
-                      labelText: "Additional Notes",
-                      prefixIcon: Icon(Icons.note_outlined),
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
+                TextFormField(
+                  controller: notesController,
+                  decoration: InputDecoration(
+                    labelText: "Additional Notes",
+                    prefixIcon: Icon(Icons.note_outlined),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
                     ),
-                    maxLines: 3,
                   ),
+                  maxLines: 3,
                 ),
                 /*        SizedBox(height: 24),
                 FadeInDown(
@@ -511,23 +488,17 @@ class _AddChallanPageState extends State<AddChallanPage> {
                   ),
                 ),*/
                 SizedBox(height: 24),
-                FadeInUp(
-                  duration: Duration(milliseconds: 400),
-                  child: ElevatedButton(
-                    onPressed: submitChallan,
-                    style: ElevatedButton.styleFrom(
-                      padding: EdgeInsets.symmetric(vertical: 16),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
+                ElevatedButton(
+                  onPressed: submitChallan,
+                  style: ElevatedButton.styleFrom(
+                    padding: EdgeInsets.symmetric(vertical: 16),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
                     ),
-                    child: Text(
-                      "ISSUE CHALLAN",
-                      style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
+                  ),
+                  child: Text(
+                    "ISSUE CHALLAN",
+                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
                   ),
                 ),
                 SizedBox(height: 24),

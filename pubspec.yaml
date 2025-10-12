@@ -31,7 +31,7 @@ dependencies:
   equatable: ^2.0.5
   
   # HTTP and Networking
-  http: ^1.1.0
+  http: ^1.5.0
   
   # Dependency Injection
   get_it: ^7.6.4
