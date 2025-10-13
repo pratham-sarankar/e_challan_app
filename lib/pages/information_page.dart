@@ -52,11 +52,29 @@ class _InformationPageState extends State<InformationPage> {
   @override
   void initState() {
     super.initState();
-    // Use centralized ApiService and load types into local state (mirrors AddChallanPage)
-    _loadChallanTypes();
+    // Initialize loading logic asynchronously so we can check whether an
+    // access token already exists before calling _loadChallanTypes. This
+    // prevents the page from calling the API twice (once immediately and
+    // again from the prefs poll).
+    _initLoad();
+  }
 
-    // If the access_token may be saved shortly after this page opens (e.g., login flow),
-    // poll SharedPreferences briefly and reload when token becomes available.
+  // Async initialization that checks for an existing token and only starts
+  // the polling timer when a token is not present. This avoids duplicate
+  // calls to _loadChallanTypes.
+  Future<void> _initLoad() async {
+    final prefs = await SharedPreferences.getInstance();
+    final token = prefs.getString('access_token');
+
+    if (token != null && token.isNotEmpty) {
+      // Token already available: load once and don't start the polling timer.
+      if (mounted) await _loadChallanTypes();
+      return;
+    }
+
+    // No token yet: start a short-lived polling timer which will call
+    // _loadChallanTypes when the token becomes available. The timer is
+    // canceled as soon as the token appears.
     _prefsPollTimer = Timer.periodic(Duration(seconds: 1), (t) async {
       final prefs = await SharedPreferences.getInstance();
       final token = prefs.getString('access_token');
@@ -65,7 +83,7 @@ class _InformationPageState extends State<InformationPage> {
         _prefsPollTimer = null;
         // Give a tiny delay to allow other parts of the app to finish storing state
         await Future.delayed(Duration(milliseconds: 200));
-        if (mounted) _loadChallanTypes();
+        if (mounted) await _loadChallanTypes();
       }
     });
   }
@@ -74,6 +92,12 @@ class _InformationPageState extends State<InformationPage> {
   /// If the access token hasn't been saved yet the server may return 401; this
   /// will retry a few times before surfacing an error.
   Future<void> _loadChallanTypes([int attempt = 0]) async {
+    // Prevent concurrent/duplicate loads: if a load is already in progress
+    // and this isn't an explicit retry attempt, skip starting another one.
+    if (_isLoadingTypes && attempt == 0) {
+      print('[InformationPage] skipping duplicate load (already loading)');
+      return;
+    }
     setState(() {
       _isLoadingTypes = true;
       _loadError = null;
@@ -87,17 +111,6 @@ class _InformationPageState extends State<InformationPage> {
         setState(() => _challanTypes = types);
       }
       // Show a small confirmation like AddChallanPage so devs/testers know the load succeeded
-      if (mounted && types.isNotEmpty) {
-        final first = types.first;
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              'Loaded ${types.length} types. First: ${first.typeName} — ₹${first.fineAmount}',
-            ),
-            duration: Duration(seconds: 2),
-          ),
-        );
-      }
     } catch (e) {
       print('[InformationPage] failed to load challan types: ${e.toString()}');
 
@@ -137,7 +150,17 @@ class _InformationPageState extends State<InformationPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: Text("Rule Violation Info")),
+      appBar: AppBar(
+        title: Text("Rule Violation Info"),
+        // Small dev/test action to clear the stored token and trigger the loader.
+        actions: [
+          IconButton(
+            tooltip: 'Clear access token',
+            icon: Icon(Icons.delete_forever),
+            onPressed: _clearStoredToken,
+          ),
+        ],
+      ),
       body: Padding(
         padding: const EdgeInsets.all(16.0),
         child: Column(

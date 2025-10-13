@@ -100,33 +100,12 @@ class _AddChallanPageState extends State<AddChallanPage> {
     try {
       final types = await _api_service.getChallanTypes();
       // Debug: log loaded types
-      print('[AddChallanPage] loaded challan types count=${types.length}');
       for (final t in types)
         print('[AddChallanPage] type=${t.typeName} fine=${t.fineAmount}');
       setState(() {
         _challanTypes = types;
       });
-      // Quick runtime confirmation so testers/devs can see the parsed fine amount.
-      if (mounted && _challanTypes.isNotEmpty) {
-        final first = _challanTypes.first;
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              'Loaded ${_challanTypes.length} types. First: ${first.typeName} — ₹${first.fineAmount}',
-            ),
-            duration: Duration(seconds: 2),
-          ),
-        );
-
-        // If the server returns exactly one challan type, auto-select it to
-        // make the UI explicit and populate the fine amount.
-        if (_challanTypes.length == 1 && _selectedType == null) {
-          setState(() {
-            _selectedType = first;
-            amountController.text = first.fineAmount.toString();
-          });
-        }
-      }
+   
       // If a type was previously selected, try to rebind it to the newly-loaded list
       if (_selectedType != null) {
         final selName = _selectedType!.typeName.trim().toLowerCase();

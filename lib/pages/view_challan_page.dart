@@ -507,8 +507,9 @@ class _ViewChallanPageState extends State<ViewChallanPage> {
   }
 
   Widget _buildChallanCard(Map<String, dynamic> challan, int index) {
-    final isPaid = challan["status"] == "Paid";
-    final statusColor = isPaid ? Colors.green : Colors.orange;
+    // Status removed from challan UI because API does not return a `status` field.
+    // Use a neutral color for the card.
+    final statusColor = Colors.orange;
 
     return Card(
       elevation: 2,
@@ -523,12 +524,7 @@ class _ViewChallanPageState extends State<ViewChallanPage> {
             gradient: LinearGradient(
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,
-              colors: [
-                Colors.white,
-                isPaid
-                    ? Colors.green.withAlpha(13)
-                    : Colors.orange.withAlpha(13),
-              ],
+              colors: [Colors.white, Colors.orange.withAlpha(13)],
             ),
           ),
           child: Row(
@@ -573,22 +569,6 @@ class _ViewChallanPageState extends State<ViewChallanPage> {
                       fontWeight: FontWeight.bold,
                       fontSize: 16,
                       color: Theme.of(context).colorScheme.primary,
-                    ),
-                  ),
-                  SizedBox(height: 4),
-                  Container(
-                    padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                    decoration: BoxDecoration(
-                      color: statusColor.withAlpha(26),
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: Text(
-                      challan["status"],
-                      style: TextStyle(
-                        color: statusColor,
-                        fontSize: 12,
-                        fontWeight: FontWeight.w500,
-                      ),
                     ),
                   ),
                 ],
@@ -764,11 +744,7 @@ class _ViewChallanPageState extends State<ViewChallanPage> {
                                       }
                                     })(),
                                   ),
-                                  _buildTableRow(
-                                    "Status",
-                                    challan['status'],
-                                    isStatus: true,
-                                  ),
+                                  // Status row removed because server challan objects do not include status
                                   _buildTableRow("Name", challan['name']),
                                   _buildTableRow("Mobile", challan['mobile']),
                                   _buildTableRow(
@@ -1022,23 +998,22 @@ class _ViewChallanPageState extends State<ViewChallanPage> {
                       child: Row(
                         mainAxisAlignment: MainAxisAlignment.end,
                         children: [
-                          if (challan["status"] != "Paid")
-                            ElevatedButton.icon(
-                              icon: Icon(Icons.payment, size: 20),
-                              label: Text(
-                                "PAY NOW",
-                                style: TextStyle(fontWeight: FontWeight.bold),
-                              ),
-                              onPressed: () {
-                                Navigator.pop(ctx);
-                                Navigator.push(
-                                  context,
-                                  MaterialPageRoute(
-                                    builder: (_) => PaymentPage(index: index),
-                                  ),
-                                );
-                              },
+                          ElevatedButton.icon(
+                            icon: Icon(Icons.payment, size: 20),
+                            label: Text(
+                              "PAY NOW",
+                              style: TextStyle(fontWeight: FontWeight.bold),
                             ),
+                            onPressed: () {
+                              Navigator.pop(ctx);
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (_) => PaymentPage(index: index),
+                                ),
+                              );
+                            },
+                          ),
                           SizedBox(width: 12),
                           OutlinedButton(
                             child: Text("CLOSE"),
