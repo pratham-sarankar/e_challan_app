@@ -1,0 +1,547 @@
+import 'dart:io';
+
+import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
+import 'package:municipal_e_challan/pages/payment_page.dart';
+import 'package:municipal_e_challan/services/api_services.dart';
+
+class ChallanDetailsPage extends StatefulWidget {
+  final Map<String, dynamic> challan;
+  final int index;
+
+  const ChallanDetailsPage({
+    Key? key,
+    required this.challan,
+    required this.index,
+  }) : super(key: key);
+
+  @override
+  _ChallanDetailsPageState createState() => _ChallanDetailsPageState();
+}
+
+class _ChallanDetailsPageState extends State<ChallanDetailsPage> {
+  final ApiService _apiService = ApiService();
+  List<Map<String, dynamic>> _serverObjs = [];
+  bool _isLoading = true;
+
+  // Transactions state
+  bool _isTransLoading = true;
+  String? _transError;
+  List<Map<String, dynamic>> _transactions = [];
+  num _totalAmount = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _fetchServerImages();
+    _fetchTransactions();
+  }
+
+  Future<void> _fetchServerImages() async {
+    setState(() => _isLoading = true);
+    try {
+      final int fetchId =
+          (widget.challan['challan_id'] ?? widget.challan['id'] ?? 0) as int;
+      if (fetchId > 0) {
+        final objs = await _apiService.getChallanImageObjects(fetchId);
+        // getChallanImageObjects returns a List<Map<String, dynamic>> so no runtime type check needed
+        _serverObjs = objs
+            .where((m) => (m['url'] as String?)?.isNotEmpty == true)
+            .map<Map<String, dynamic>>((m) => Map<String, dynamic>.from(m))
+            .toList();
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to load evidence images: ${e.toString()}'),
+          ),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
+  Future<void> _fetchTransactions() async {
+    setState(() {
+      _isTransLoading = true;
+      _transError = null;
+    });
+    try {
+      final int fetchId =
+          (widget.challan['challan_id'] ?? widget.challan['id'] ?? 0) as int;
+      if (fetchId > 0) {
+        final data = await _apiService.getChallanTransactions(fetchId);
+        // Safely extract expected fields
+        final txs = (data['transactions'] is List)
+            ? data['transactions'] as List
+            : <dynamic>[];
+        _transactions = txs
+            .where((e) => e != null)
+            .map<Map<String, dynamic>>(
+              (e) => Map<String, dynamic>.from(e as Map<String, dynamic>),
+            )
+            .toList();
+        _totalAmount = (data['total_amount'] is num)
+            ? data['total_amount'] as num
+            : num.tryParse('${data['total_amount']}') ?? 0;
+      } else {
+        _transactions = [];
+        // no transactions; keep list empty
+        _totalAmount = 0;
+      }
+    } catch (e) {
+      _transError = e.toString();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to load transactions: ${e.toString()}'),
+          ),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isTransLoading = false);
+    }
+  }
+
+  Future<void> _deleteImage(int imgId, String url) async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (c) => AlertDialog(
+        title: Text('Delete image?'),
+        content: Text(
+          'This will permanently delete the selected evidence image.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(c, false),
+            child: Text('CANCEL'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(c, true),
+            child: Text('DELETE', style: TextStyle(color: Colors.red)),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm != true) return;
+
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => Center(child: CircularProgressIndicator()),
+    );
+
+    try {
+      final int fetchId =
+          (widget.challan['challan_id'] ?? widget.challan['id'] ?? 0) as int;
+      await _apiService.deleteChallanImage(fetchId, imgId);
+
+      // Update local lists/state
+      setState(() {
+        _serverObjs.removeWhere((x) => (x['id'] == imgId) || (x['url'] == url));
+        if (widget.challan['image_urls'] is List) {
+          final List l = widget.challan['image_urls'] as List;
+          l.removeWhere((e) => e?.toString() == url);
+          widget.challan['image_urls'] = l;
+        }
+      });
+
+      Navigator.pop(context); // remove progress
+
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Image deleted')));
+    } catch (e) {
+      Navigator.pop(context); // remove progress
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to delete image: ${e.toString()}')),
+      );
+    }
+  }
+
+  Widget _buildImageWidget(dynamic img) {
+    try {
+      if (img == null) return Container(color: Colors.grey[200]);
+
+      if (img is String) {
+        return Image.network(
+          img,
+          fit: BoxFit.cover,
+          errorBuilder: (ctx, err, st) => Container(
+            color: Colors.grey[200],
+            child: Icon(Icons.broken_image, color: Colors.grey),
+          ),
+        );
+      }
+
+      if (img is ImageProvider) return Image(image: img, fit: BoxFit.cover);
+
+      if (img is File) return Image.file(img, fit: BoxFit.cover);
+
+      final dynamic maybePath = (img as dynamic).path;
+      if (maybePath is String && maybePath.isNotEmpty) {
+        return Image.file(File(maybePath), fit: BoxFit.cover);
+      }
+    } catch (_) {}
+    return Container(color: Colors.grey[200]);
+  }
+
+  Widget _buildTransactionsSection() {
+    if (_isTransLoading) {
+      return Padding(
+        padding: const EdgeInsets.symmetric(vertical: 12.0),
+        child: Center(child: CircularProgressIndicator()),
+      );
+    }
+
+    if (_transError != null) {
+      return Padding(
+        padding: const EdgeInsets.symmetric(vertical: 12.0),
+        child: Text(
+          'Failed to load transactions',
+          style: TextStyle(color: Colors.red),
+        ),
+      );
+    }
+
+    if (_transactions.isEmpty) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(height: 8),
+          Text(
+            'No transactions found for this challan.',
+            style: TextStyle(color: Colors.grey[700]),
+          ),
+          SizedBox(height: 6),
+        ],
+      );
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        SizedBox(height: 8),
+        Text(
+          'Total: ₹${_totalAmount.toString()}',
+          style: TextStyle(fontWeight: FontWeight.bold),
+        ),
+        SizedBox(height: 8),
+        ListView.separated(
+          shrinkWrap: true,
+          physics: NeverScrollableScrollPhysics(),
+          itemCount: _transactions.length,
+          separatorBuilder: (_, __) => Divider(height: 1),
+          itemBuilder: (ctx, i) {
+            final tx = _transactions[i];
+            final amt =
+                tx['amount'] ?? tx['paid_amount'] ?? tx['payment_amount'] ?? '';
+            final status = tx['status'] ?? tx['payment_status'] ?? '';
+            final method = tx['method'] ?? tx['payment_method'] ?? '';
+            final id = tx['id'] ?? tx['transaction_id'] ?? '';
+            String dateStr = '';
+            final rawDate =
+                tx['created_at'] ??
+                tx['paid_at'] ??
+                tx['timestamp'] ??
+                tx['date'];
+            if (rawDate != null) {
+              try {
+                final dt = DateTime.parse(rawDate.toString());
+                dateStr = DateFormat('dd/MM/yyyy HH:mm').format(dt);
+              } catch (_) {
+                dateStr = rawDate.toString();
+              }
+            }
+
+            return ListTile(
+              title: Text(
+                '₹${amt.toString()}',
+                style: TextStyle(fontWeight: FontWeight.bold),
+              ),
+              subtitle: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  if (method.toString().isNotEmpty)
+                    Text('${method.toString()}'),
+                  if (dateStr.isNotEmpty) Text(dateStr),
+                ],
+              ),
+              trailing: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  Text(
+                    status.toString(),
+                    style: TextStyle(
+                      color: status.toString().toLowerCase() == 'paid'
+                          ? Colors.green
+                          : Colors.orange,
+                    ),
+                  ),
+                  SizedBox(height: 4),
+                  Text(
+                    '#${id.toString()}',
+                    style: TextStyle(fontSize: 12, color: Colors.grey),
+                  ),
+                ],
+              ),
+            );
+          },
+        ),
+      ],
+    );
+  }
+
+  TableRow _buildTableRow(
+    String label,
+    dynamic value, {
+    bool isStatus = false,
+  }) {
+    final String text = value?.toString() ?? '-';
+    final bool paid = text.toLowerCase() == 'paid';
+    return TableRow(
+      children: [
+        Padding(
+          padding: EdgeInsets.all(12),
+          child: Text(
+            label,
+            style: TextStyle(
+              fontWeight: FontWeight.bold,
+              color: Colors.grey.shade700,
+            ),
+          ),
+        ),
+        Padding(
+          padding: EdgeInsets.all(12),
+          child: Text(
+            text,
+            style: TextStyle(
+              fontWeight: isStatus ? FontWeight.bold : FontWeight.normal,
+              color: isStatus
+                  ? (paid ? Colors.green : Colors.orange)
+                  : Colors.black87,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final challan = widget.challan;
+    final hasEvidence =
+        _serverObjs.isNotEmpty ||
+        ((challan['images'] as List?)?.isNotEmpty ?? false) ||
+        ((challan['image_urls'] as List?)?.isNotEmpty ?? false);
+
+    return Scaffold(
+      appBar: AppBar(
+        title: Text('Challan Details'),
+        actions: [
+          IconButton(icon: Icon(Icons.print), onPressed: () => _printChallan()),
+        ],
+      ),
+      body: Stack(
+        children: [
+          SingleChildScrollView(
+            padding: EdgeInsets.all(20),
+            child: Column(
+              children: [
+                Container(
+                  decoration: BoxDecoration(
+                    border: Border.all(color: Colors.grey.shade200),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Table(
+                    columnWidths: {
+                      0: FlexColumnWidth(1.5),
+                      1: FlexColumnWidth(2.5),
+                    },
+                    children: [
+                      _buildTableRow('Challan No.', '#${widget.index + 1}'),
+                      _buildTableRow(
+                        'Date',
+                        (() {
+                          final createdRaw =
+                              challan['created_at'] ??
+                              challan['createdAt'] ??
+                              '';
+                          try {
+                            final dt = DateTime.parse(createdRaw.toString());
+                            return DateFormat('dd/MM/yyyy').format(dt);
+                          } catch (_) {
+                            return DateFormat(
+                              'dd/MM/yyyy',
+                            ).format(DateTime.now());
+                          }
+                        })(),
+                      ),
+                      _buildTableRow('Name', challan['name']),
+                      _buildTableRow('Mobile', challan['mobile']),
+                      _buildTableRow('Rule Violated', challan['rule']),
+                      _buildTableRow('Fine Amount', '₹${challan['amount']}'),
+                      _buildTableRow('Notes', challan['notes'] ?? '-'),
+                    ],
+                  ),
+                ),
+                SizedBox(height: 20),
+                if (hasEvidence) ...[
+                  Text(
+                    'EVIDENCE IMAGES',
+                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                  ),
+                  SizedBox(height: 10),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: [
+                      ...(_serverObjs.isNotEmpty
+                              ? _serverObjs
+                              : (challan['image_urls'] as List? ?? [])
+                                    .map((u) => {'id': 0, 'url': u})
+                                    .toList())
+                          .map<Widget>((m) {
+                            final String url = (m['url'] as String?) ?? '';
+                            final int imgId = (m['id'] is int)
+                                ? m['id'] as int
+                                : int.tryParse('${m['id']}') ?? 0;
+
+                            return Stack(
+                              children: [
+                                ClipRRect(
+                                  borderRadius: BorderRadius.circular(8),
+                                  child: Image.network(
+                                    url,
+                                    width: 100,
+                                    height: 100,
+                                    fit: BoxFit.cover,
+                                    errorBuilder: (ctx2, err, st) => Container(
+                                      width: 100,
+                                      height: 100,
+                                      color: Colors.grey[200],
+                                      child: Icon(
+                                        Icons.broken_image,
+                                        color: Colors.grey,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                                if (imgId > 0)
+                                  Positioned(
+                                    top: 4,
+                                    right: 4,
+                                    child: Container(
+                                      decoration: BoxDecoration(
+                                        color: Colors.black54,
+                                        borderRadius: BorderRadius.circular(20),
+                                      ),
+                                      child: IconButton(
+                                        padding: EdgeInsets.all(4),
+                                        constraints: BoxConstraints(),
+                                        icon: Icon(
+                                          Icons.delete,
+                                          size: 18,
+                                          color: Colors.white,
+                                        ),
+                                        onPressed: () =>
+                                            _deleteImage(imgId, url),
+                                      ),
+                                    ),
+                                  ),
+                              ],
+                            );
+                          })
+                          .toList(),
+
+                      ...((challan['images'] as List?) ?? [])
+                          .map<Widget>(
+                            (img) => ClipRRect(
+                              borderRadius: BorderRadius.circular(8),
+                              child: SizedBox(
+                                width: 100,
+                                height: 100,
+                                child: _buildImageWidget(img),
+                              ),
+                            ),
+                          )
+                          .toList(),
+                    ],
+                  ),
+                ],
+                SizedBox(height: 20),
+                // Transactions section
+                Container(
+                  width: double.infinity,
+                  decoration: BoxDecoration(
+                    border: Border.all(color: Colors.grey.shade200),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  padding: EdgeInsets.all(12),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'TRANSACTIONS',
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 16,
+                        ),
+                      ),
+                      _buildTransactionsSection(),
+                    ],
+                  ),
+                ),
+                SizedBox(height: 40),
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton.icon(
+                    icon: Icon(Icons.payment, size: 20),
+                    label: Text(
+                      'PAY NOW',
+                      style: TextStyle(fontWeight: FontWeight.bold),
+                    ),
+                    style: ElevatedButton.styleFrom(
+                      padding: EdgeInsets.symmetric(vertical: 14),
+                    ),
+                    onPressed: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => PaymentPage(
+                            index: widget.index,
+                            challan: widget.challan,
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+                ),
+              ],
+            ),
+          ),
+          if (_isLoading)
+            Positioned.fill(
+              child: Container(
+                color: Colors.black12,
+                child: Center(child: CircularProgressIndicator()),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  void _printChallan() {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('Printing feature will be implemented soon'),
+        backgroundColor: Theme.of(context).colorScheme.primary,
+      ),
+    );
+  }
+}

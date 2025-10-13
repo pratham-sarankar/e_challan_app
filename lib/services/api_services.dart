@@ -566,6 +566,42 @@ class ApiService {
     }
   }
 
+  /// Fetch transactions for a specific challan id.
+  /// Returns the `data` map from the API (may contain `transactions`, `transaction_count`, `total_amount`, etc.).
+  Future<Map<String, dynamic>> getChallanTransactions(int challanId) async {
+    final url = Uri.parse('$baseUrl/challans/$challanId/transactions');
+    final headers = await getAuthHeaders();
+    final response = await http.get(url, headers: headers);
+
+    print('[ApiService] GET $url -> ${response.statusCode}');
+
+    if (response.statusCode == 200) {
+      final decoded = jsonDecode(response.body);
+      if (decoded is Map && decoded['status'] == 'success') {
+        final data = decoded['data'];
+        if (data is Map<String, dynamic>) {
+          return data;
+        }
+        // If data is missing but response is success, return an empty map.
+        return <String, dynamic>{};
+      } else {
+        final message = (decoded is Map && decoded['message'] != null)
+            ? decoded['message']
+            : 'Unexpected response';
+        throw Exception(message);
+      }
+    } else {
+      String msg =
+          'Failed to fetch transactions (status ${response.statusCode})';
+      try {
+        final decoded = jsonDecode(response.body);
+        if (decoded is Map && decoded['message'] != null)
+          msg = decoded['message'];
+      } catch (_) {}
+      throw Exception(msg);
+    }
+  }
+
   /// Delete a challan image identified by challanId and imageId.
   /// Throws on non-success responses.
   Future<void> deleteChallanImage(int challanId, int imageId) async {

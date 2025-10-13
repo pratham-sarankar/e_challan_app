@@ -63,11 +63,7 @@ class _DashboardPageState extends State<DashboardPage> {
 
     try {
       final prefs = await SharedPreferences.getInstance();
-      final token =
-          prefs.getString('access_token') ??
-          // fallback sample token from user's provided curl (short-lived in real use)
-          'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJ0ZXN0QDQiLCJleHAiOjE3NjAzMDAyNjB9.rFGAsxAVl4PuyZRdrl45Tl6WpOgBwIxueXB8wfnTl3k';
-
+      final token = prefs.getString('access_token');
       final uri = Uri.parse('https://echallan-bilaspur.sublimeai.in/profile');
       final resp = await http
           .get(

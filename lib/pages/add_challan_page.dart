@@ -105,7 +105,7 @@ class _AddChallanPageState extends State<AddChallanPage> {
       setState(() {
         _challanTypes = types;
       });
-   
+
       // If a type was previously selected, try to rebind it to the newly-loaded list
       if (_selectedType != null) {
         final selName = _selectedType!.typeName.trim().toLowerCase();
@@ -389,6 +389,9 @@ class _AddChallanPageState extends State<AddChallanPage> {
                             MaterialPageRoute(
                               builder: (_) => PaymentPage(
                                 index: DashboardPage.challans.length - 1,
+                                challan: DashboardPage.challans.isNotEmpty
+                                    ? DashboardPage.challans.last
+                                    : null,
                               ),
                             ),
                           );

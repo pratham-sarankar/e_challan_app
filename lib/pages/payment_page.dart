@@ -1,66 +1,88 @@
-import 'package:flutter/material.dart';
-import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:pdf/pdf.dart';
 import 'package:barcode_widget/barcode_widget.dart';
-import 'package:printing/printing.dart';
-import 'package:pdf/widgets.dart' as pw;
+import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
-
-import 'package:municipal_e_challan/bloc/payment/payment_bloc.dart';
-import 'package:municipal_e_challan/bloc/payment/payment_event.dart';
-import 'package:municipal_e_challan/bloc/payment/payment_state.dart';
 import 'package:municipal_e_challan/models/payment_models.dart';
 import 'package:municipal_e_challan/services/payment_service.dart';
+import 'package:pdf/pdf.dart';
+import 'package:pdf/widgets.dart' as pw;
+import 'package:printing/printing.dart';
 
 import 'dashboard_page.dart';
 
 /// Payment Page with BLoC integration for ICICI POS payments
 /// Provides multiple payment options: Card (POS), UPI, and Cash
 class PaymentPage extends StatelessWidget {
-  final int index;
+  // index may be null if a full challan map is provided directly.
+  final int? index;
 
-  const PaymentPage({super.key, required this.index});
+  // Optional challan map - prefer this when provided to avoid indexing into the global list.
+  final Map<String, dynamic>? challan;
+
+  const PaymentPage({super.key, this.index, this.challan});
 
   @override
   Widget build(BuildContext context) {
-    final challan = DashboardPage.challans[index];
-    final amount = challan['amount'] ?? '0';
-    final challanId = 'CHALLAN_${index + 1}';
-    final violatorName = challan['name'] ?? '';
-    final violatorMobile = challan['mobile'] ?? '';
+    // Resolve challan map safely. Prefer provided challan, then try index lookup when valid,
+    // otherwise fall back to an empty map to avoid RangeError.
+    Map<String, dynamic> resolvedChallan = {};
+    int resolvedIndex = index ?? 0;
+    if (challan != null) {
+      resolvedChallan = Map<String, dynamic>.from(challan!);
+      // attempt to find its index in DashboardPage list if possible
+      final idx = DashboardPage.challans.indexWhere((c) {
+        try {
+          return c == resolvedChallan ||
+              (c['id'] != null && c['id'] == resolvedChallan['id']);
+        } catch (_) {
+          return false;
+        }
+      });
+      if (idx != -1) resolvedIndex = idx;
+    } else if (index != null &&
+        index! >= 0 &&
+        index! < DashboardPage.challans.length) {
+      resolvedIndex = index!;
+      resolvedChallan = Map<String, dynamic>.from(
+        DashboardPage.challans[resolvedIndex],
+      );
+    } else if (DashboardPage.challans.isNotEmpty) {
+      // fallback to first challan if available
+      resolvedChallan = Map<String, dynamic>.from(DashboardPage.challans[0]);
+      resolvedIndex = 0;
+    } else {
+      resolvedChallan = <String, dynamic>{};
+      resolvedIndex = 0;
+    }
 
-    // Create PaymentBloc with dependency injection
-    return BlocProvider(
-      create: (context) =>
-          PaymentBloc(
-            paymentService: PaymentServiceFactory.create(useMock: false),
-            config: PaymentConfig.defaultConfig,
-          )..add(
-            PaymentInitializeEvent(
-              challanId: challanId,
-              amount: amount,
-              violatorName: violatorName,
-              violatorMobile: violatorMobile,
-            ),
-          ),
-      child: PaymentPageView(
-        index: index,
-        challan: challan,
-        amount: amount,
-        challanId: challanId,
-        violatorName: violatorName,
-        violatorMobile: violatorMobile,
-      ),
+    final amount = resolvedChallan['amount']?.toString() ?? '0';
+    // Use a raw challan id internally (prefer explicit id field if present)
+    final rawChallanId =
+        (resolvedChallan['id']?.toString() ?? (resolvedIndex + 1).toString());
+    // Display-friendly challan id for UI
+    final challanId = 'CHALLAN_$rawChallanId';
+    final violatorName = resolvedChallan['name'] ?? '';
+    final violatorMobile = resolvedChallan['mobile'] ?? '';
+
+    // Create PaymentPageView (BLoC removed - using PaymentService directly)
+    return PaymentPageView(
+      index: resolvedIndex,
+      challan: resolvedChallan,
+      amount: amount,
+      challanId: challanId,
+      rawChallanId: rawChallanId,
+      violatorName: violatorName,
+      violatorMobile: violatorMobile,
     );
   }
 }
 
 /// Payment Page View Widget - handles UI rendering
-class PaymentPageView extends StatelessWidget {
+class PaymentPageView extends StatefulWidget {
   final int index;
   final Map<String, dynamic> challan;
   final String amount;
-  final String challanId;
+  final String challanId; // display id
+  final String rawChallanId; // actual challan id to use as bill number
   final String violatorName;
   final String violatorMobile;
 
@@ -70,48 +92,86 @@ class PaymentPageView extends StatelessWidget {
     required this.challan,
     required this.amount,
     required this.challanId,
+    required this.rawChallanId,
     required this.violatorName,
     required this.violatorMobile,
   });
 
   @override
+  State<PaymentPageView> createState() => _PaymentPageViewState();
+}
+
+class _PaymentPageViewState extends State<PaymentPageView> {
+  late final IPaymentService _paymentService;
+  bool _isProcessing = false;
+  String _processingMessage = '';
+  PaymentTransaction? _transaction;
+  String? _errorMessage;
+  bool _posNotInstalled = false;
+  // Focus on card payment by default. Other methods can be enabled in config if needed.
+  List<String> _availablePaymentMethods = ['CARD'];
+
+  @override
+  void initState() {
+    super.initState();
+    _paymentService = PaymentServiceFactory.create(useMock: false);
+    _checkPosAvailability();
+  }
+
+  Future<void> _checkPosAvailability() async {
+    final installed = await _paymentService.isPosAppInstalled();
+    setState(() {
+      _posNotInstalled = !installed;
+    });
+  }
+
+  @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(title: const Text("Payment Options"), elevation: 0),
-      body: BlocConsumer<PaymentBloc, PaymentState>(
-        listener: (context, state) {
-          _handleStateChanges(context, state);
-        },
-        builder: (context, state) {
-          return _buildPaymentUI(context, state);
-        },
+      body: SingleChildScrollView(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _buildChallanInfoCard(context),
+            const SizedBox(height: 24),
+            _buildPaymentAmountCard(),
+            const SizedBox(height: 24),
+            _buildPaymentOptions(context),
+            const SizedBox(height: 12),
+            _buildHelpInfo(),
+          ],
+        ),
       ),
     );
   }
 
   /// Build the payment UI based on current state
-  Widget _buildPaymentUI(BuildContext context, PaymentState state) {
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(24),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Challan Information Card
-          _buildChallanInfoCard(context),
-          const SizedBox(height: 24),
+  Widget _buildPaymentOptions(BuildContext context) {
+    if (_posNotInstalled) {
+      return _buildPosNotInstalledCard(
+        'ICICI POS integration is not available on this device. Please install/configure the POS plugin or use other payment options.',
+        context,
+      );
+    }
 
-          // Payment Amount Card
-          _buildPaymentAmountCard(),
-          const SizedBox(height: 24),
+    if (_isProcessing) {
+      return _buildProcessingCard(_processingMessage.isNotEmpty
+          ? _processingMessage
+          : 'Processing...');
+    }
 
-          // Payment Options based on state
-          _buildPaymentOptions(context, state),
+    if (_transaction != null) {
+      return _buildSuccessCard(context, _transaction!);
+    }
 
-          // Help Information
-          _buildHelpInfo(),
-        ],
-      ),
-    );
+    if (_errorMessage != null) {
+      return _buildFailureCard(_errorMessage!, context);
+    }
+
+    // Default: show available payment methods
+    return _buildPaymentMethodsCard(context);
   }
 
   /// Build challan information card
@@ -140,10 +200,10 @@ class PaymentPageView extends StatelessWidget {
               ],
             ),
             const SizedBox(height: 16),
-            _buildInfoRow("Challan ID", challanId),
-            _buildInfoRow("Violator Name", violatorName),
-            _buildInfoRow("Mobile", violatorMobile),
-            _buildInfoRow("Rule Violated", challan['rule'] ?? ''),
+            _buildInfoRow("Challan ID", widget.challanId),
+            _buildInfoRow("Violator Name", widget.violatorName),
+            _buildInfoRow("Mobile", widget.violatorMobile),
+            _buildInfoRow("Rule Violated", widget.challan['rule'] ?? ''),
           ],
         ),
       ),
@@ -152,70 +212,40 @@ class PaymentPageView extends StatelessWidget {
 
   /// Build payment amount card
   Widget _buildPaymentAmountCard() {
-    return Card(
-      elevation: 4,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-      child: Padding(
-        padding: const EdgeInsets.all(24),
-        child: Column(
-          children: [
-            Text(
-              "Payable Amount",
-              style: TextStyle(fontSize: 18, color: Colors.grey[600]),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              "₹$amount",
-              style: TextStyle(
-                fontSize: 36,
-                fontWeight: FontWeight.bold,
-                color: Colors.indigo,
+    // Ensure the card expands to the full available width
+    return SizedBox(
+      width: double.infinity,
+      child: Card(
+        elevation: 4,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        child: Container(
+          width: double.infinity,
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                "Payable Amount",
+                style: TextStyle(fontSize: 18, color: Colors.grey[600]),
               ),
-            ),
-          ],
+              const SizedBox(height: 8),
+              Text(
+                "₹${widget.amount}",
+                style: TextStyle(
+                  fontSize: 36,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.indigo,
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
   }
 
-  /// Build payment options based on current state
-  Widget _buildPaymentOptions(BuildContext context, PaymentState state) {
-    if (state is PaymentPosNotInstalledState) {
-      return _buildPosNotInstalledCard(state.message, context);
-    }
-
-    if (state is PaymentReadyState) {
-      return _buildPaymentMethodsCard(context, state);
-    }
-
-    if (state is PaymentPosProcessingState) {
-      return _buildProcessingCard("Processing Card Payment...");
-    }
-
-    if (state is PaymentUpiProcessingState) {
-      return _buildUpiPaymentCard(context, state);
-    }
-
-    if (state is PaymentCashProcessingState) {
-      return _buildCashProcessingCard();
-    }
-
-    if (state is PaymentSuccessState) {
-      return _buildSuccessCard(context, state);
-    }
-
-    if (state is PaymentFailureState) {
-      return _buildFailureCard(state.error, context);
-    }
-
-    return _buildLoadingCard();
-  }
-
   /// Build payment methods selection card
-  Widget _buildPaymentMethodsCard(
-    BuildContext context,
-    PaymentReadyState state,
-  ) {
+  Widget _buildPaymentMethodsCard(BuildContext context) {
     return Card(
       elevation: 4,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
@@ -233,46 +263,33 @@ class PaymentPageView extends StatelessWidget {
             const SizedBox(height: 20),
 
             // Card Payment Option
-            if (state.availablePaymentMethods.contains('CARD'))
+            if (_availablePaymentMethods.contains('CARD'))
               _buildPaymentMethodButton(
                 context: context,
                 icon: Icons.credit_card,
                 title: "Card Payment",
                 subtitle: "Pay using debit/credit card via ICICI POS",
                 color: Colors.blue,
-                onTap: () => _processCardPayment(context),
+                onTap: () => _startVizpaySale(context),
               ),
 
-            if (state.availablePaymentMethods.contains('CARD'))
+            if (_availablePaymentMethods.contains('CARD'))
               const SizedBox(height: 12),
             // QR Payment Option
-            _buildPaymentMethodButton(
-              context: context,
-              icon: Icons.qr_code,
-              title: "UPI Payment",
-              subtitle: "Pay using QR code scanning",
-              color: Colors.teal,
-              onTap: () => _processQrPayment(context),
-            ),
-
-            const SizedBox(height: 12),
-
-            /*           // UPI Payment Option
-            if (state.availablePaymentMethods.contains('UPI'))
+            if (_availablePaymentMethods.contains('UPI'))
               _buildPaymentMethodButton(
                 context: context,
                 icon: Icons.qr_code,
                 title: "UPI Payment",
-                subtitle: "Pay using UPI apps like PhonePe, Google Pay",
-                color: Colors.purple,
+                subtitle: "Pay using QR code scanning",
+                color: Colors.teal,
                 onTap: () => _processUpiPayment(context),
               ),
-            
-            if (state.availablePaymentMethods.contains('UPI'))
-              const SizedBox(height: 12),
-            */
+
+            const SizedBox(height: 12),
+
             // Cash Payment Option
-            if (state.availablePaymentMethods.contains('CASH'))
+            if (_availablePaymentMethods.contains('CASH'))
               _buildPaymentMethodButton(
                 context: context,
                 icon: Icons.money,
@@ -282,7 +299,7 @@ class PaymentPageView extends StatelessWidget {
                 onTap: () => _processCashPayment(context),
               ),
 
-            if (state.availablePaymentMethods.contains('CASH'))
+            if (_availablePaymentMethods.contains('CASH'))
               const SizedBox(height: 12),
 
             /*    // BQR Payment Option
@@ -293,8 +310,8 @@ class PaymentPageView extends StatelessWidget {
               subtitle: "Pay using Bharat QR code",
               color: Colors.orange,
               onTap: () => _processBqrPayment(context),
-            ),
-            
+            );
+
             const SizedBox(height: 12),*/
 
             /*          // Cash at POS Option
@@ -305,10 +322,10 @@ class PaymentPageView extends StatelessWidget {
               subtitle: "Pay cash at POS terminal",
               color: Colors.brown,
               onTap: () => _processCashAtPosPayment(context),
-            ),*/
+            );*/
 
             /*  const SizedBox(height: 12),
-            
+
             // Pre-Auth Option
             _buildPaymentMethodButton(
               context: context,
@@ -339,7 +356,7 @@ class PaymentPageView extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
-          border: Border.all(color: color.withOpacity(0.3)),
+          border: Border.all(color: color.withAlpha((0.3 * 255).round())),
           borderRadius: BorderRadius.circular(12),
         ),
         child: Row(
@@ -347,7 +364,7 @@ class PaymentPageView extends StatelessWidget {
             Container(
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
-                color: color.withOpacity(0.1),
+                color: color.withAlpha((0.1 * 255).round()),
                 borderRadius: BorderRadius.circular(8),
               ),
               child: Icon(icon, color: color, size: 24),
@@ -379,10 +396,7 @@ class PaymentPageView extends StatelessWidget {
   }
 
   /// Build UPI payment card with QR code
-  Widget _buildUpiPaymentCard(
-    BuildContext context,
-    PaymentUpiProcessingState state,
-  ) {
+  Widget _buildUpiPaymentCard(BuildContext context, String qrData) {
     return Card(
       elevation: 4,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
@@ -412,7 +426,7 @@ class PaymentPageView extends StatelessWidget {
                 barcode: Barcode.qrCode(
                   errorCorrectLevel: BarcodeQRCorrectionLevel.high,
                 ),
-                data: state.qrCodeData,
+                data: qrData,
                 width: 200,
                 height: 200,
                 color: Colors.indigo,
@@ -428,16 +442,21 @@ class PaymentPageView extends StatelessWidget {
               children: [
                 Expanded(
                   child: OutlinedButton(
-                    onPressed: () => context.read<PaymentBloc>().add(
-                      const PaymentResetEvent(),
-                    ),
+                    onPressed: () {
+                      // Cancel UPI flow and reset
+                      setState(() {
+                        _isProcessing = false;
+                        _processingMessage = '';
+                        _errorMessage = null;
+                      });
+                    },
                     child: const Text("Cancel"),
                   ),
                 ),
                 const SizedBox(width: 12),
                 Expanded(
                   child: ElevatedButton(
-                    onPressed: () => _simulateUpiSuccess(context),
+                    onPressed: () => _processUpiPayment(context),
                     style: ElevatedButton.styleFrom(
                       backgroundColor: Colors.green,
                     ),
@@ -475,7 +494,7 @@ class PaymentPageView extends StatelessWidget {
   }
 
   /// Build success card
-  Widget _buildSuccessCard(BuildContext context, PaymentSuccessState state) {
+  Widget _buildSuccessCard(BuildContext context, PaymentTransaction transaction) {
     return Card(
       elevation: 4,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
@@ -494,15 +513,14 @@ class PaymentPageView extends StatelessWidget {
             ),
             const SizedBox(height: 8),
             Text(
-              "Receipt Number: ${state.receiptNumber}",
+              "Receipt Number: ${transaction.receiptNumber}",
               style: TextStyle(color: Colors.grey[600]),
             ),
             const SizedBox(height: 24),
             SizedBox(
               width: double.infinity,
               child: ElevatedButton.icon(
-                onPressed: () =>
-                    _showReceiptDialog(context, challan, state.transaction),
+                onPressed: () => _showReceiptDialog(context, widget.challan, transaction),
                 icon: const Icon(Icons.receipt),
                 label: const Text("View Receipt"),
                 style: ElevatedButton.styleFrom(
@@ -546,8 +564,13 @@ class PaymentPageView extends StatelessWidget {
             SizedBox(
               width: double.infinity,
               child: ElevatedButton(
-                onPressed: () =>
-                    context.read<PaymentBloc>().add(const PaymentResetEvent()),
+                onPressed: () {
+                  setState(() {
+                    _errorMessage = null;
+                    _transaction = null;
+                    _isProcessing = false;
+                  });
+                },
                 child: const Text("Try Again"),
               ),
             ),
@@ -586,8 +609,11 @@ class PaymentPageView extends StatelessWidget {
             SizedBox(
               width: double.infinity,
               child: ElevatedButton(
-                onPressed: () =>
-                    context.read<PaymentBloc>().add(const PaymentResetEvent()),
+                onPressed: () {
+                  setState(() {
+                    _posNotInstalled = false;
+                  });
+                },
                 child: const Text("Continue with Other Options"),
               ),
             ),
@@ -681,147 +707,140 @@ class PaymentPageView extends StatelessWidget {
     );
   }
 
-  /// Handle state changes
-  void _handleStateChanges(BuildContext context, PaymentState state) {
-    if (state is PaymentSuccessState) {
-      // Mark challan as paid
-      DashboardPage.challans[index]["status"] = "Paid";
+  /// Start card payment using PaymentService directly
+  Future<void> _startCardPayment(BuildContext context) async {
+    setState(() {
+      _isProcessing = true;
+      _processingMessage = 'Processing Card Payment...';
+      _errorMessage = null;
+    });
 
-      // Show success message
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text("Payment successful! Receipt: ${state.receiptNumber}"),
-          backgroundColor: Colors.green,
-          behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(10),
-          ),
-        ),
-      );
-    } else if (state is PaymentFailureState) {
-      // Show error message
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text("Payment failed: ${state.error}"),
-          backgroundColor: Colors.red,
-          behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(10),
-          ),
-        ),
-      );
-    }
-  }
+    // bill number should be the challan id itself
+    final billNumber = widget.rawChallanId;
 
-  /// Process card payment
-  void _processCardPayment(BuildContext context) {
-    final billNumber = PaymentService.generateBillNumber(challanId);
     final request = PosRequest(
-      amount: amount,
+      amount: widget.amount,
       tranType: 'SALE',
       billNumber: billNumber,
       sourceId: PaymentConfig.defaultConfig.sourceId,
       printFlag: '1',
       udf: {
-        'UDF1': challanId,
-        'UDF2': violatorName,
-        'UDF3': violatorMobile,
-        'UDF4': challan['rule'] ?? '',
+        'UDF1': widget.rawChallanId,
+        'UDF2': widget.violatorName,
+        'UDF3': widget.violatorMobile,
+        'UDF4': widget.challan['rule'] ?? '',
         'UDF5': 'MUNICIPAL_CHALLAN',
       },
     );
 
-    context.read<PaymentBloc>().add(PaymentProcessEvent(posRequest: request));
+    try {
+      final response = await _paymentService.processPayment(request);
+      if (response.isSuccess) {
+        final transaction = PaymentTransaction(
+          transactionId: _generateTransactionId(),
+          challanId: widget.rawChallanId,
+          amount: widget.amount,
+          paymentMethod: 'CARD',
+          status: 'COMPLETED',
+          timestamp: DateTime.now(),
+          posResponse: response,
+          receiptNumber: response.receiptData?['InvoiceNr']?.toString(),
+        );
+
+        setState(() {
+          _transaction = transaction;
+          _isProcessing = false;
+        });
+
+        DashboardPage.challans[widget.index]["status"] = "Paid";
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text('Payment successful! Receipt: ${transaction.receiptNumber ?? ''}'),
+          backgroundColor: Colors.green,
+        ));
+      } else {
+        if (response.statusCode == 'MISSING_PLUGIN' ||
+            (response.statusMessage?.toLowerCase().contains('plugin') ?? false)) {
+          setState(() {
+            _posNotInstalled = true;
+            _isProcessing = false;
+          });
+        } else {
+          setState(() {
+            _errorMessage = response.statusMessage;
+            _isProcessing = false;
+          });
+        }
+      }
+    } catch (e) {
+      setState(() {
+        _errorMessage = 'Payment failed: $e';
+        _isProcessing = false;
+      });
+    }
   }
 
-  /// Process UPI payment
-  void _processUpiPayment(BuildContext context) {
-    context.read<PaymentBloc>().add(
-      PaymentUpiEvent(
-        amount: amount,
-        challanId: challanId,
-        violatorName: violatorName,
-      ),
-    );
-  }
+  /// Start Vizpay sale transaction (alias to _startCardPayment)
+  void _startVizpaySale(BuildContext context) => _startCardPayment(context);
 
-  /// Process cash payment
-  void _processCashPayment(BuildContext context) {
-    context.read<PaymentBloc>().add(
-      PaymentCashEvent(
-        amount: amount,
-        challanId: challanId,
-        violatorName: violatorName,
-      ),
-    );
-  }
-
-  /// Simulate UPI payment success
-  void _simulateUpiSuccess(BuildContext context) {
-    // In real implementation, this would be handled by UPI callback
+  /// UPI and cash handlers (simple simulations)
+  void _processUpiPayment(BuildContext context) async {
+    setState(() {
+      _isProcessing = true;
+      _processingMessage = 'Preparing UPI payment...';
+      _errorMessage = null;
+    });
+    await Future.delayed(const Duration(seconds: 2));
     final transaction = PaymentTransaction(
-      transactionId: PaymentService.generateTransactionId(),
-      challanId: challanId,
-      amount: amount,
+      transactionId: _generateTransactionId(),
+      challanId: widget.rawChallanId,
+      amount: widget.amount,
       paymentMethod: 'UPI',
       status: 'COMPLETED',
       timestamp: DateTime.now(),
       receiptNumber: 'UPI_${DateTime.now().millisecondsSinceEpoch}',
     );
-
-    // Mark challan as paid
-    DashboardPage.challans[index]["status"] = "Paid";
-
-    // Show receipt dialog
-    _showReceiptDialog(context, challan, transaction);
-
-    // Navigate back
-    Navigator.pop(context);
-    Navigator.pop(context);
+    setState(() {
+      _transaction = transaction;
+      _isProcessing = false;
+    });
+    DashboardPage.challans[widget.index]["status"] = "Paid";
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+      content: Text('UPI payment completed: ${transaction.receiptNumber}'),
+      backgroundColor: Colors.green,
+    ));
   }
 
-  /// Process BQR payment
-  void _processBqrPayment(BuildContext context) {
-    context.read<PaymentBloc>().add(
-      PaymentBqrEvent(
-        amount: amount,
-        challanId: challanId,
-        violatorName: violatorName,
-      ),
+  void _processCashPayment(BuildContext context) async {
+    setState(() {
+      _isProcessing = true;
+      _processingMessage = 'Processing cash payment...';
+      _errorMessage = null;
+    });
+    await Future.delayed(const Duration(seconds: 1));
+    final transaction = PaymentTransaction(
+      transactionId: _generateTransactionId(),
+      challanId: widget.rawChallanId,
+      amount: widget.amount,
+      paymentMethod: 'CASH',
+      status: 'COMPLETED',
+      timestamp: DateTime.now(),
+      receiptNumber: 'CASH_${DateTime.now().millisecondsSinceEpoch}',
     );
+    setState(() {
+      _transaction = transaction;
+      _isProcessing = false;
+    });
+    DashboardPage.challans[widget.index]["status"] = "Paid";
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+      content: Text('Cash payment recorded: ${transaction.receiptNumber}'),
+      backgroundColor: Colors.green,
+    ));
   }
 
-  /// Process QR payment
-  void _processQrPayment(BuildContext context) {
-    context.read<PaymentBloc>().add(
-      PaymentQrEvent(
-        amount: amount,
-        challanId: challanId,
-        violatorName: violatorName,
-      ),
-    );
-  }
-
-  /// Process Cash at POS payment
-  void _processCashAtPosPayment(BuildContext context) {
-    context.read<PaymentBloc>().add(
-      PaymentCashAtPosEvent(
-        amount: amount,
-        challanId: challanId,
-        violatorName: violatorName,
-      ),
-    );
-  }
-
-  /// Process Pre-Auth payment
-  void _processPreAuthPayment(BuildContext context) {
-    context.read<PaymentBloc>().add(
-      PaymentPreAuthEvent(
-        amount: amount,
-        challanId: challanId,
-        violatorName: violatorName,
-      ),
-    );
+  String _generateTransactionId() {
+    final timestamp = DateTime.now().millisecondsSinceEpoch;
+    final random = (timestamp % 10000).toString().padLeft(4, '0');
+    return 'TXN_${timestamp}_$random';
   }
 }
 
@@ -838,21 +857,15 @@ Widget _buildReceiptRow({
     child: Row(
       crossAxisAlignment: CrossAxisAlignment.center,
       children: [
-        // Label with optional icon (now with overflow handling and tighter spacing)
         Expanded(
           flex: 2,
           child: Row(
             children: [
               if (icon != null) ...[
-                Icon(
-                  icon,
-                  size: 14,
-                  color: Colors.grey[600],
-                ), // Slightly smaller icon
-                SizedBox(width: 6), // Reduced spacing to prevent overflow
+                Icon(icon, size: 14, color: Colors.grey[600]),
+                SizedBox(width: 6),
               ],
               Flexible(
-                // This is fine: Flexible inside Row (Flex)
                 child: Text(
                   label,
                   style: TextStyle(
@@ -860,15 +873,13 @@ Widget _buildReceiptRow({
                     fontWeight: isTotal ? FontWeight.bold : FontWeight.w500,
                     color: Colors.grey[800],
                   ),
-                  overflow:
-                      TextOverflow.ellipsis, // Ellipsis if text is too long
+                  overflow: TextOverflow.ellipsis,
                   maxLines: 1,
                 ),
               ),
             ],
           ),
         ),
-        // Value with special styling (SIMPLIFIED: No Container/Align/Flexible to avoid ParentData error)
         Expanded(
           flex: 3,
           child: Text(
@@ -882,9 +893,8 @@ Widget _buildReceiptRow({
                   ? Colors.black87
                   : Colors.grey[700],
             ),
-            textAlign: TextAlign.right, // Align right directly on Text
-            overflow:
-                TextOverflow.ellipsis, // Ellipsis if needed (rare for values)
+            textAlign: TextAlign.right,
+            overflow: TextOverflow.ellipsis,
             maxLines: 1,
           ),
         ),
@@ -893,26 +903,21 @@ Widget _buildReceiptRow({
   );
 }
 
-/// Show receipt dialog (redesigned for modern, clean UI - unchanged from previous)
+/// Show receipt dialog
 Future<void> _showReceiptDialog(
   BuildContext context,
   Map<String, dynamic> challan, [
   PaymentTransaction? transaction,
 ]) async {
-  return showDialog(
+  return showDialog<void>(
     context: context,
-    barrierDismissible: false, // Prevent accidental dismissal
+    barrierDismissible: false,
     builder: (_) => Dialog(
-      insetPadding: const EdgeInsets.all(16), // Responsive padding
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(20), // Softer corners
-      ),
-      elevation: 8, // Add subtle shadow
+      insetPadding: const EdgeInsets.all(16),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+      elevation: 8,
       child: Container(
-        constraints: const BoxConstraints(
-          maxWidth: 500,
-          maxHeight: 600,
-        ), // Limit height for scrollability
+        constraints: const BoxConstraints(maxWidth: 500, maxHeight: 600),
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(20),
           color: Colors.white,
@@ -920,7 +925,6 @@ Future<void> _showReceiptDialog(
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            // App Bar-like Header (modern, with close button)
             Container(
               width: double.infinity,
               padding: const EdgeInsets.fromLTRB(20, 20, 20, 16),
@@ -932,7 +936,6 @@ Future<void> _showReceiptDialog(
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    // Title with icon
                     Row(
                       children: [
                         Icon(Icons.receipt_long, color: Colors.white, size: 28),
@@ -947,7 +950,6 @@ Future<void> _showReceiptDialog(
                         ),
                       ],
                     ),
-                    // Close button
                     IconButton(
                       onPressed: () => Navigator.pop(context),
                       icon: const Icon(
@@ -965,8 +967,6 @@ Future<void> _showReceiptDialog(
                 ),
               ),
             ),
-
-            // Organization Header (below the green bar)
             Container(
               width: double.infinity,
               padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 20),
@@ -982,15 +982,12 @@ Future<void> _showReceiptDialog(
                 ),
               ),
             ),
-
-            // Scrollable Receipt Content (for better handling on small screens)
             Flexible(
               child: SingleChildScrollView(
                 padding: const EdgeInsets.all(20),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    // Receipt Details Section
                     _buildReceiptRow(
                       label: "Receipt No.",
                       value: "#${DateTime.now().millisecondsSinceEpoch}",
@@ -1025,15 +1022,11 @@ Future<void> _showReceiptDialog(
                       icon: Icons.check_circle,
                     ),
                     const SizedBox(height: 24),
-
-                    // Divider for separation
                     Divider(
                       thickness: 1.5,
                       color: Colors.grey[300],
                       height: 32,
                     ),
-
-                    // Additional Details Section
                     Padding(
                       padding: EdgeInsets.symmetric(vertical: 8),
                       child: Text(
@@ -1060,8 +1053,6 @@ Future<void> _showReceiptDialog(
                 ),
               ),
             ),
-
-            // Footer with Actions (modern buttons with consistent styling)
             Container(
               padding: const EdgeInsets.all(20),
               decoration: BoxDecoration(
@@ -1072,7 +1063,6 @@ Future<void> _showReceiptDialog(
               ),
               child: Row(
                 children: [
-                  // Close Button (outlined for subtlety)
                   Expanded(
                     child: OutlinedButton.icon(
                       onPressed: () => Navigator.pop(context),
@@ -1088,7 +1078,6 @@ Future<void> _showReceiptDialog(
                     ),
                   ),
                   const SizedBox(width: 12),
-                  // Print Button (filled, prominent)
                   Expanded(
                     child: ElevatedButton.icon(
                       onPressed: () {
@@ -1114,27 +1103,23 @@ Future<void> _showReceiptDialog(
           ],
         ),
       ),
-    ),
-  );
-}
+    );
+  }
 
 Future<void> _printReceipt(Map<String, dynamic> challan) async {
-  // Create PDF document with standard A4 page size
   final pdf = pw.Document();
 
   pdf.addPage(
     pw.Page(
-      pageFormat: PdfPageFormat.a4, // Standard A4 size (210mm x 297mm)
+      pageFormat: PdfPageFormat.a4,
       build: (pw.Context context) => pw.Center(
-        // Center the content for better aesthetics
         child: pw.Container(
           width: double.infinity,
-          padding: const pw.EdgeInsets.all(40), // Add padding for margins
+          padding: const pw.EdgeInsets.all(40),
           child: pw.Column(
             crossAxisAlignment: pw.CrossAxisAlignment.center,
             mainAxisAlignment: pw.MainAxisAlignment.start,
             children: [
-              // Header with title (centered and bold)
               pw.Container(
                 alignment: pw.Alignment.center,
                 child: pw.Column(
@@ -1159,8 +1144,6 @@ Future<void> _printReceipt(Map<String, dynamic> challan) async {
                 ),
               ),
               pw.SizedBox(height: 30),
-
-              // Receipt details in a structured table for better alignment
               pw.Table(
                 border: pw.TableBorder.all(color: PdfColors.grey300, width: 1),
                 defaultColumnWidth: const pw.FlexColumnWidth(2),
@@ -1271,10 +1254,7 @@ Future<void> _printReceipt(Map<String, dynamic> challan) async {
                   ),
                 ],
               ),
-
               pw.SizedBox(height: 40),
-
-              // Footer (optional: add any additional notes or signature line)
               pw.Divider(thickness: 2),
               pw.SizedBox(height: 10),
               pw.Container(
@@ -1302,9 +1282,8 @@ Future<void> _printReceipt(Map<String, dynamic> challan) async {
           ),
         ),
       ),
-    ),
-  );
+    );
+  }
 
-  // Layout and print the PDF (standard printing flow)
-  await Printing.layoutPdf(onLayout: (format) => pdf.save());
+  await Printing.layoutPdf(onLayout: (format) async => pdf.save());
 }
