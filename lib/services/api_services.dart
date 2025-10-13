@@ -647,6 +647,57 @@ class ApiService {
     }
   }
 
+  /// Create a transaction for a challan payment
+  /// Throws on non-success responses.
+  Future<Map<String, dynamic>> createTransaction({
+    required int challanId,
+    required String orderStatus,
+    String? orderId,
+    int? employeeId,
+    String? paymentMethod,
+    String? paymentReference,
+    required double amount,
+    String? notes,
+  }) async {
+    final url = Uri.parse('$baseUrl/transactions');
+    final headers = await getAuthHeaders();
+    final body = jsonEncode({
+      'challan_id': challanId,
+      'order_status': orderStatus,
+      'order_id': orderId,
+      'employee_id': employeeId,
+      'payment_method': paymentMethod,
+      'payment_reference': paymentReference,
+      'amount': amount,
+      'notes': notes,
+    });
+
+    final response = await http.post(url, headers: headers, body: body);
+
+    print('[ApiService] POST $url -> ${response.statusCode}');
+
+    if (response.statusCode == 200 || response.statusCode == 201) {
+      final decoded = jsonDecode(response.body);
+      if (decoded is Map &&
+          decoded['status'] == 'success' &&
+          decoded['data'] != null) {
+        return Map<String, dynamic>.from(decoded['data']);
+      } else {
+        final message = decoded['message'] ?? 'Unexpected response from server';
+        throw Exception(message);
+      }
+    } else {
+      String msg =
+          'Create transaction failed with status ${response.statusCode}';
+      try {
+        final decoded = jsonDecode(response.body);
+        if (decoded is Map && decoded['message'] != null)
+          msg = decoded['message'];
+      } catch (_) {}
+      throw Exception(msg);
+    }
+  }
+
   /// Map a server challan JSON object to the app's local challan Map shape
   Map<String, dynamic> _mapServerChallanToLocal(Map<String, dynamic> src) {
     // Helper to build full URL for image paths that may be relative

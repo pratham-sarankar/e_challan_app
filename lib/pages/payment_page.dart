@@ -2,6 +2,8 @@ import 'package:barcode_widget/barcode_widget.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:municipal_e_challan/models/payment_models.dart';
+import 'package:municipal_e_challan/services/api_services.dart';
+import 'package:vizpay_flutter/vizpay_flutter.dart';
 
 /// Payment Page with BLoC integration for ICICI POS payments
 /// Provides multiple payment options: Card (POS), UPI, and Cash
@@ -79,6 +81,8 @@ class _PaymentPageViewState extends State<PaymentPageView> {
   bool _posNotInstalled = false;
   // Focus on card payment by default. Other methods can be enabled in config if needed.
   List<String> _availablePaymentMethods = ['CARD'];
+
+  final ApiService _apiService = ApiService();
 
   @override
   void initState() {
@@ -714,7 +718,158 @@ class _PaymentPageViewState extends State<PaymentPageView> {
   }
 
   /// Start card payment using PaymentService directly
-  Future<void> _startCardPayment(BuildContext context) async {}
+  Future<void> _startCardPayment(BuildContext context) async {
+    try {
+      setState(() {
+        _isProcessing = true;
+        _processingMessage = 'Initiating card payment...';
+        _errorMessage = null;
+      });
+
+      // Parse amount to ensure proper format
+      final double amountValue = double.parse(widget.amount);
+      final String formattedAmount = amountValue.toStringAsFixed(2);
+
+      // Use transaction ID as bill number and challan ID as source ID as requested
+      final transactionId = 'TXN_${DateTime.now().millisecondsSinceEpoch}';
+      final billNumber = transactionId; // Transaction ID as bill number
+      final sourceId = widget.rawChallanId; // Challan ID as source ID
+
+      setState(() {
+        _processingMessage = 'Processing card payment...';
+      });
+
+      // Start VizPay sale transaction
+      final response = await VizpayFlutter.startSaleTransaction(
+        amount: formattedAmount,
+        billNumber: billNumber,
+        sourceId: sourceId,
+        tipAmount: "0.00",
+        printFlag: true,
+      );
+
+      if (response != null) {
+        final statusCode = response["STATUS_CODE"] as String?;
+        final statusMsg = response["STATUS_MSG"] as String?;
+        final receiptData = response["RECEIPT_DATA"] as String?;
+
+        if (statusCode == "00") {
+          // Payment successful - create transaction record
+          setState(() {
+            _processingMessage =
+                'Payment successful! Creating transaction record...';
+          });
+
+          try {
+            final transactionData = await _apiService.createTransaction(
+              challanId: int.parse(widget.rawChallanId),
+              orderStatus: 'paid',
+              orderId: transactionId,
+              paymentMethod: 'CARD',
+              paymentReference: receiptData,
+              amount: amountValue,
+              notes: 'Card payment via ICICI POS - VizPay',
+            );
+
+            // Create successful payment transaction
+            final transaction = PaymentTransaction(
+              transactionId: transactionId,
+              challanId: widget.rawChallanId,
+              amount: formattedAmount,
+              paymentMethod: 'CARD',
+              status: 'SUCCESS',
+              timestamp: DateTime.now(),
+              posResponse: PosResponse(
+                statusCode: statusCode ?? '00',
+                statusMessage: statusMsg ?? 'Approved',
+                receiptData: receiptData != null
+                    ? {'receipt': receiptData}
+                    : null,
+                rawResponse: response,
+              ),
+              receiptNumber: transactionData['id']?.toString(),
+            );
+
+            setState(() {
+              _isProcessing = false;
+              _transaction = transaction;
+              _processingMessage = '';
+            });
+
+            // Show success message
+            if (mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text(
+                    'Payment successful! Transaction ID: $transactionId',
+                  ),
+                  backgroundColor: Colors.green,
+                  duration: Duration(seconds: 3),
+                ),
+              );
+            }
+          } catch (e) {
+            // Payment was successful but transaction creation failed
+            print('Transaction creation failed: $e');
+            setState(() {
+              _isProcessing = false;
+              _errorMessage =
+                  'Payment successful but failed to record transaction: ${e.toString()}';
+            });
+          }
+        } else {
+          // Payment failed
+          setState(() {
+            _isProcessing = false;
+            _errorMessage = 'Payment failed: ${statusMsg ?? 'Unknown error'}';
+          });
+
+          // Try to create a failed transaction record
+          try {
+            await _apiService.createTransaction(
+              challanId: int.parse(widget.rawChallanId),
+              orderStatus: 'failed',
+              orderId: transactionId,
+              paymentMethod: 'CARD',
+              paymentReference: receiptData,
+              amount: amountValue,
+              notes:
+                  'Failed card payment via ICICI POS - VizPay: ${statusMsg ?? 'Unknown error'}',
+            );
+          } catch (e) {
+            print('Failed to record failed transaction: $e');
+          }
+        }
+      } else {
+        setState(() {
+          _isProcessing = false;
+          _errorMessage =
+              'No response from payment app. Please ensure ICICI VizPay app is installed.';
+        });
+      }
+    } catch (e) {
+      print('Card payment error: $e');
+      setState(() {
+        _isProcessing = false;
+        _errorMessage = 'Payment error: ${e.toString()}';
+      });
+
+      // Try to create a failed transaction record
+      try {
+        final transactionId = 'TXN_${DateTime.now().millisecondsSinceEpoch}';
+        await _apiService.createTransaction(
+          challanId: int.parse(widget.rawChallanId),
+          orderStatus: 'failed',
+          orderId: transactionId,
+          paymentMethod: 'CARD',
+          amount: double.parse(widget.amount),
+          notes: 'Failed card payment due to error: ${e.toString()}',
+        );
+      } catch (transError) {
+        print('Failed to record error transaction: $transError');
+      }
+    }
+  }
 
   /// Start Vizpay sale transaction (alias to _startCardPayment)
   void _startVizpaySale(BuildContext context) => _startCardPayment(context);
