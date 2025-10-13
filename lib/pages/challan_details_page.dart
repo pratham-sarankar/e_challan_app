@@ -10,10 +10,10 @@ class ChallanDetailsPage extends StatefulWidget {
   final int index;
 
   const ChallanDetailsPage({
-    Key? key,
+    super.key,
     required this.challan,
     required this.index,
-  }) : super(key: key);
+  });
 
   @override
   _ChallanDetailsPageState createState() => _ChallanDetailsPageState();
@@ -265,8 +265,7 @@ class _ChallanDetailsPageState extends State<ChallanDetailsPage> {
               subtitle: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  if (method.toString().isNotEmpty)
-                    Text('${method.toString()}'),
+                  if (method.toString().isNotEmpty) Text(method.toString()),
                   if (dateStr.isNotEmpty) Text(dateStr),
                 ],
               ),
@@ -455,21 +454,18 @@ class _ChallanDetailsPageState extends State<ChallanDetailsPage> {
                                   ),
                               ],
                             );
-                          })
-                          .toList(),
+                          }),
 
-                      ...((challan['images'] as List?) ?? [])
-                          .map<Widget>(
-                            (img) => ClipRRect(
-                              borderRadius: BorderRadius.circular(8),
-                              child: SizedBox(
-                                width: 100,
-                                height: 100,
-                                child: _buildImageWidget(img),
-                              ),
-                            ),
-                          )
-                          .toList(),
+                      ...((challan['images'] as List?) ?? []).map<Widget>(
+                        (img) => ClipRRect(
+                          borderRadius: BorderRadius.circular(8),
+                          child: SizedBox(
+                            width: 100,
+                            height: 100,
+                            child: _buildImageWidget(img),
+                          ),
+                        ),
+                      ),
                     ],
                   ),
                 ],

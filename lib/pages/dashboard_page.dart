@@ -14,8 +14,6 @@ import 'login_page.dart';
 import 'view_challan_page.dart';
 
 class DashboardPage extends StatefulWidget {
-  static List<Map<String, dynamic>> challans = [];
-
   DashboardPage({super.key});
 
   @override

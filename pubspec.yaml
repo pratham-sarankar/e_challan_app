@@ -24,7 +24,6 @@ dependencies:
   animate_do: ^3.3.4
   shimmer: ^3.0.0
   shared_preferences: ^2.1.0
-  geolocator: ^9.0.2
 
 
   # Local vizpay plugin (path dependency)

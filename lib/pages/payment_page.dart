@@ -2,12 +2,6 @@ import 'package:barcode_widget/barcode_widget.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:municipal_e_challan/models/payment_models.dart';
-import 'package:municipal_e_challan/services/payment_service.dart';
-import 'package:pdf/pdf.dart';
-import 'package:pdf/widgets.dart' as pw;
-import 'package:printing/printing.dart';
-
-import 'dashboard_page.dart';
 
 /// Payment Page with BLoC integration for ICICI POS payments
 /// Provides multiple payment options: Card (POS), UPI, and Cash
@@ -22,42 +16,21 @@ class PaymentPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // Resolve challan map safely. Prefer provided challan, then try index lookup when valid,
-    // otherwise fall back to an empty map to avoid RangeError.
+    // Resolve challan map safely. Use provided challan data or create empty map if none provided.
     Map<String, dynamic> resolvedChallan = {};
-    int resolvedIndex = index ?? 0;
     if (challan != null) {
       resolvedChallan = Map<String, dynamic>.from(challan!);
-      // attempt to find its index in DashboardPage list if possible
-      final idx = DashboardPage.challans.indexWhere((c) {
-        try {
-          return c == resolvedChallan ||
-              (c['id'] != null && c['id'] == resolvedChallan['id']);
-        } catch (_) {
-          return false;
-        }
-      });
-      if (idx != -1) resolvedIndex = idx;
-    } else if (index != null &&
-        index! >= 0 &&
-        index! < DashboardPage.challans.length) {
-      resolvedIndex = index!;
-      resolvedChallan = Map<String, dynamic>.from(
-        DashboardPage.challans[resolvedIndex],
-      );
-    } else if (DashboardPage.challans.isNotEmpty) {
-      // fallback to first challan if available
-      resolvedChallan = Map<String, dynamic>.from(DashboardPage.challans[0]);
-      resolvedIndex = 0;
     } else {
+      // If no challan data provided, we can't proceed with payment
       resolvedChallan = <String, dynamic>{};
-      resolvedIndex = 0;
     }
 
     final amount = resolvedChallan['amount']?.toString() ?? '0';
     // Use a raw challan id internally (prefer explicit id field if present)
     final rawChallanId =
-        (resolvedChallan['id']?.toString() ?? (resolvedIndex + 1).toString());
+        (resolvedChallan['id']?.toString() ??
+        resolvedChallan['challan_id']?.toString() ??
+        '0');
     // Display-friendly challan id for UI
     final challanId = 'CHALLAN_$rawChallanId';
     final violatorName = resolvedChallan['name'] ?? '';
@@ -65,7 +38,6 @@ class PaymentPage extends StatelessWidget {
 
     // Create PaymentPageView (BLoC removed - using PaymentService directly)
     return PaymentPageView(
-      index: resolvedIndex,
       challan: resolvedChallan,
       amount: amount,
       challanId: challanId,
@@ -78,7 +50,6 @@ class PaymentPage extends StatelessWidget {
 
 /// Payment Page View Widget - handles UI rendering
 class PaymentPageView extends StatefulWidget {
-  final int index;
   final Map<String, dynamic> challan;
   final String amount;
   final String challanId; // display id
@@ -88,7 +59,6 @@ class PaymentPageView extends StatefulWidget {
 
   const PaymentPageView({
     super.key,
-    required this.index,
     required this.challan,
     required this.amount,
     required this.challanId,
@@ -102,7 +72,6 @@ class PaymentPageView extends StatefulWidget {
 }
 
 class _PaymentPageViewState extends State<PaymentPageView> {
-  late final IPaymentService _paymentService;
   bool _isProcessing = false;
   String _processingMessage = '';
   PaymentTransaction? _transaction;
@@ -114,15 +83,6 @@ class _PaymentPageViewState extends State<PaymentPageView> {
   @override
   void initState() {
     super.initState();
-    _paymentService = PaymentServiceFactory.create(useMock: false);
-    _checkPosAvailability();
-  }
-
-  Future<void> _checkPosAvailability() async {
-    final installed = await _paymentService.isPosAppInstalled();
-    setState(() {
-      _posNotInstalled = !installed;
-    });
   }
 
   @override
@@ -157,9 +117,9 @@ class _PaymentPageViewState extends State<PaymentPageView> {
     }
 
     if (_isProcessing) {
-      return _buildProcessingCard(_processingMessage.isNotEmpty
-          ? _processingMessage
-          : 'Processing...');
+      return _buildProcessingCard(
+        _processingMessage.isNotEmpty ? _processingMessage : 'Processing...',
+      );
     }
 
     if (_transaction != null) {
@@ -212,29 +172,71 @@ class _PaymentPageViewState extends State<PaymentPageView> {
 
   /// Build payment amount card
   Widget _buildPaymentAmountCard() {
-    // Ensure the card expands to the full available width
+    // Format the amount for better readability
+    String formattedAmount = widget.amount;
+    try {
+      double amount = double.parse(widget.amount);
+      final formatter = NumberFormat('#,##,###');
+      formattedAmount = formatter.format(amount);
+    } catch (e) {
+      // Keep original amount if parsing fails
+    }
+
     return SizedBox(
       width: double.infinity,
       child: Card(
-        elevation: 4,
+        elevation: 6,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         child: Container(
           width: double.infinity,
           padding: const EdgeInsets.all(24),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(16),
+            gradient: LinearGradient(
+              colors: [Colors.indigo.shade50, Colors.white],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+            ),
+          ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.start,
+                children: [
+                  Icon(
+                    Icons.account_balance_wallet,
+                    color: Colors.indigo,
+                    size: 24,
+                  ),
+                  const SizedBox(width: 8),
+                  Text(
+                    "Amount to Pay",
+                    style: TextStyle(
+                      fontSize: 18,
+                      color: Colors.grey[700],
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
               Text(
-                "Payable Amount",
-                style: TextStyle(fontSize: 18, color: Colors.grey[600]),
+                "₹$formattedAmount",
+                style: const TextStyle(
+                  fontSize: 42,
+                  color: Colors.indigo,
+                  fontWeight: FontWeight.bold,
+                  letterSpacing: 1.2,
+                ),
               ),
               const SizedBox(height: 8),
               Text(
-                "₹${widget.amount}",
+                "Inclusive of all charges",
                 style: TextStyle(
-                  fontSize: 36,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.indigo,
+                  fontSize: 12,
+                  color: Colors.grey[500],
+                  fontStyle: FontStyle.italic,
                 ),
               ),
             ],
@@ -494,7 +496,10 @@ class _PaymentPageViewState extends State<PaymentPageView> {
   }
 
   /// Build success card
-  Widget _buildSuccessCard(BuildContext context, PaymentTransaction transaction) {
+  Widget _buildSuccessCard(
+    BuildContext context,
+    PaymentTransaction transaction,
+  ) {
     return Card(
       elevation: 4,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
@@ -520,7 +525,8 @@ class _PaymentPageViewState extends State<PaymentPageView> {
             SizedBox(
               width: double.infinity,
               child: ElevatedButton.icon(
-                onPressed: () => _showReceiptDialog(context, widget.challan, transaction),
+                onPressed: () =>
+                    _showReceiptDialog(context, widget.challan, transaction),
                 icon: const Icon(Icons.receipt),
                 label: const Text("View Receipt"),
                 style: ElevatedButton.styleFrom(
@@ -708,76 +714,7 @@ class _PaymentPageViewState extends State<PaymentPageView> {
   }
 
   /// Start card payment using PaymentService directly
-  Future<void> _startCardPayment(BuildContext context) async {
-    setState(() {
-      _isProcessing = true;
-      _processingMessage = 'Processing Card Payment...';
-      _errorMessage = null;
-    });
-
-    // bill number should be the challan id itself
-    final billNumber = widget.rawChallanId;
-
-    final request = PosRequest(
-      amount: widget.amount,
-      tranType: 'SALE',
-      billNumber: billNumber,
-      sourceId: PaymentConfig.defaultConfig.sourceId,
-      printFlag: '1',
-      udf: {
-        'UDF1': widget.rawChallanId,
-        'UDF2': widget.violatorName,
-        'UDF3': widget.violatorMobile,
-        'UDF4': widget.challan['rule'] ?? '',
-        'UDF5': 'MUNICIPAL_CHALLAN',
-      },
-    );
-
-    try {
-      final response = await _paymentService.processPayment(request);
-      if (response.isSuccess) {
-        final transaction = PaymentTransaction(
-          transactionId: _generateTransactionId(),
-          challanId: widget.rawChallanId,
-          amount: widget.amount,
-          paymentMethod: 'CARD',
-          status: 'COMPLETED',
-          timestamp: DateTime.now(),
-          posResponse: response,
-          receiptNumber: response.receiptData?['InvoiceNr']?.toString(),
-        );
-
-        setState(() {
-          _transaction = transaction;
-          _isProcessing = false;
-        });
-
-        DashboardPage.challans[widget.index]["status"] = "Paid";
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text('Payment successful! Receipt: ${transaction.receiptNumber ?? ''}'),
-          backgroundColor: Colors.green,
-        ));
-      } else {
-        if (response.statusCode == 'MISSING_PLUGIN' ||
-            (response.statusMessage?.toLowerCase().contains('plugin') ?? false)) {
-          setState(() {
-            _posNotInstalled = true;
-            _isProcessing = false;
-          });
-        } else {
-          setState(() {
-            _errorMessage = response.statusMessage;
-            _isProcessing = false;
-          });
-        }
-      }
-    } catch (e) {
-      setState(() {
-        _errorMessage = 'Payment failed: $e';
-        _isProcessing = false;
-      });
-    }
-  }
+  Future<void> _startCardPayment(BuildContext context) async {}
 
   /// Start Vizpay sale transaction (alias to _startCardPayment)
   void _startVizpaySale(BuildContext context) => _startCardPayment(context);
@@ -803,11 +740,12 @@ class _PaymentPageViewState extends State<PaymentPageView> {
       _transaction = transaction;
       _isProcessing = false;
     });
-    DashboardPage.challans[widget.index]["status"] = "Paid";
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-      content: Text('UPI payment completed: ${transaction.receiptNumber}'),
-      backgroundColor: Colors.green,
-    ));
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('UPI payment completed: ${transaction.receiptNumber}'),
+        backgroundColor: Colors.green,
+      ),
+    );
   }
 
   void _processCashPayment(BuildContext context) async {
@@ -830,11 +768,12 @@ class _PaymentPageViewState extends State<PaymentPageView> {
       _transaction = transaction;
       _isProcessing = false;
     });
-    DashboardPage.challans[widget.index]["status"] = "Paid";
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-      content: Text('Cash payment recorded: ${transaction.receiptNumber}'),
-      backgroundColor: Colors.green,
-    ));
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('Cash payment recorded: ${transaction.receiptNumber}'),
+        backgroundColor: Colors.green,
+      ),
+    );
   }
 
   String _generateTransactionId() {
@@ -1081,7 +1020,6 @@ Future<void> _showReceiptDialog(
                   Expanded(
                     child: ElevatedButton.icon(
                       onPressed: () {
-                        _printReceipt(challan);
                         Navigator.pop(context);
                       },
                       icon: const Icon(Icons.print, size: 20),
@@ -1103,187 +1041,6 @@ Future<void> _showReceiptDialog(
           ],
         ),
       ),
-    );
-  }
-
-Future<void> _printReceipt(Map<String, dynamic> challan) async {
-  final pdf = pw.Document();
-
-  pdf.addPage(
-    pw.Page(
-      pageFormat: PdfPageFormat.a4,
-      build: (pw.Context context) => pw.Center(
-        child: pw.Container(
-          width: double.infinity,
-          padding: const pw.EdgeInsets.all(40),
-          child: pw.Column(
-            crossAxisAlignment: pw.CrossAxisAlignment.center,
-            mainAxisAlignment: pw.MainAxisAlignment.start,
-            children: [
-              pw.Container(
-                alignment: pw.Alignment.center,
-                child: pw.Column(
-                  children: [
-                    pw.Text(
-                      'Municipal Corporation Bilaspur',
-                      style: pw.TextStyle(
-                        fontSize: 20,
-                        fontWeight: pw.FontWeight.bold,
-                      ),
-                    ),
-                    pw.SizedBox(height: 10),
-                    pw.Text(
-                      'PAYMENT RECEIPT',
-                      style: pw.TextStyle(
-                        fontSize: 18,
-                        fontWeight: pw.FontWeight.bold,
-                        decoration: pw.TextDecoration.underline,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              pw.SizedBox(height: 30),
-              pw.Table(
-                border: pw.TableBorder.all(color: PdfColors.grey300, width: 1),
-                defaultColumnWidth: const pw.FlexColumnWidth(2),
-                children: [
-                  pw.TableRow(
-                    decoration: pw.BoxDecoration(color: PdfColors.grey100),
-                    children: [
-                      pw.Padding(
-                        padding: const pw.EdgeInsets.all(8),
-                        child: pw.Text(
-                          'Receipt No.:',
-                          style: pw.TextStyle(fontWeight: pw.FontWeight.bold),
-                        ),
-                      ),
-                      pw.Padding(
-                        padding: const pw.EdgeInsets.all(8),
-                        child: pw.Text(
-                          '#${DateTime.now().millisecondsSinceEpoch}',
-                        ),
-                      ),
-                    ],
-                  ),
-                  pw.TableRow(
-                    children: [
-                      pw.Padding(
-                        padding: const pw.EdgeInsets.all(8),
-                        child: pw.Text('Date & Time:'),
-                      ),
-                      pw.Padding(
-                        padding: const pw.EdgeInsets.all(8),
-                        child: pw.Text(
-                          DateFormat(
-                            'dd/MM/yyyy hh:mm a',
-                          ).format(DateTime.now()),
-                        ),
-                      ),
-                    ],
-                  ),
-                  pw.TableRow(
-                    children: [
-                      pw.Padding(
-                        padding: const pw.EdgeInsets.all(8),
-                        child: pw.Text('Name:'),
-                      ),
-                      pw.Padding(
-                        padding: const pw.EdgeInsets.all(8),
-                        child: pw.Text(challan['name'] ?? 'N/A'),
-                      ),
-                    ],
-                  ),
-                  pw.TableRow(
-                    children: [
-                      pw.Padding(
-                        padding: const pw.EdgeInsets.all(8),
-                        child: pw.Text('Amount:'),
-                      ),
-                      pw.Padding(
-                        padding: const pw.EdgeInsets.all(8),
-                        child: pw.Text('₹${challan['amount'] ?? 0}'),
-                      ),
-                    ],
-                  ),
-                  pw.TableRow(
-                    children: [
-                      pw.Padding(
-                        padding: const pw.EdgeInsets.all(8),
-                        child: pw.Text('Rule:'),
-                      ),
-                      pw.Padding(
-                        padding: const pw.EdgeInsets.all(8),
-                        child: pw.Text('${challan['rule'] ?? 0}'),
-                      ),
-                    ],
-                  ),
-                  pw.TableRow(
-                    children: [
-                      pw.Padding(
-                        padding: const pw.EdgeInsets.all(8),
-                        child: pw.Text('Payment Mode:'),
-                      ),
-                      pw.Padding(
-                        padding: const pw.EdgeInsets.all(8),
-                        child: pw.Text('Cash'),
-                      ),
-                    ],
-                  ),
-                  pw.TableRow(
-                    decoration: pw.BoxDecoration(color: PdfColors.green100),
-                    children: [
-                      pw.Padding(
-                        padding: const pw.EdgeInsets.all(8),
-                        child: pw.Text(
-                          'Status:',
-                          style: pw.TextStyle(fontWeight: pw.FontWeight.bold),
-                        ),
-                      ),
-                      pw.Padding(
-                        padding: const pw.EdgeInsets.all(8),
-                        child: pw.Text(
-                          'Paid',
-                          style: pw.TextStyle(
-                            color: PdfColors.green800,
-                            fontWeight: pw.FontWeight.bold,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-              pw.SizedBox(height: 40),
-              pw.Divider(thickness: 2),
-              pw.SizedBox(height: 10),
-              pw.Container(
-                alignment: pw.Alignment.center,
-                child: pw.Text(
-                  'Thank you for your payment!',
-                  style: pw.TextStyle(
-                    fontSize: 14,
-                    fontStyle: pw.FontStyle.italic,
-                  ),
-                ),
-              ),
-              pw.SizedBox(height: 20),
-              pw.Container(
-                width: double.infinity,
-                child: pw.Row(
-                  children: [
-                    pw.Expanded(child: pw.Container()),
-                    pw.Text('Signature: ________________'),
-                    pw.Expanded(child: pw.Container()),
-                  ],
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  await Printing.layoutPdf(onLayout: (format) async => pdf.save());
+    ),
+  );
 }

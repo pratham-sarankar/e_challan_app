@@ -8,7 +8,6 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:shimmer/shimmer.dart';
 
 import 'challan_details_page.dart';
-import 'dashboard_page.dart';
 
 class ViewChallanPage extends StatefulWidget {
   const ViewChallanPage({super.key});
@@ -103,7 +102,7 @@ class _ViewChallanPageState extends State<ViewChallanPage> {
         );
       }
       setState(() {
-        _filteredChallans = DashboardPage.challans;
+        _filteredChallans = [];
         _isLoading = false;
       });
     }
@@ -407,15 +406,6 @@ class _ViewChallanPageState extends State<ViewChallanPage> {
                               if (fetchId > 0) {
                                 await _apiService.deleteChallan(fetchId);
                               }
-
-                              // Also update in-memory DashboardPage list if present
-                              try {
-                                DashboardPage.challans.removeWhere((c) {
-                                  final int cid =
-                                      (c['challan_id'] ?? c['id'] ?? 0) as int;
-                                  return cid == fetchId;
-                                });
-                              } catch (_) {}
 
                               Navigator.pop(context); // remove progress dialog
                               ScaffoldMessenger.of(context).showSnackBar(

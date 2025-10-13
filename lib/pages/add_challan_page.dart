@@ -1,14 +1,12 @@
 import 'dart:io';
 
 import 'package:flutter/material.dart';
-import 'package:geolocator/geolocator.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:municipal_e_challan/models/challan_response.dart';
 import 'package:municipal_e_challan/models/challan_type.dart';
 import 'package:municipal_e_challan/services/api_services.dart';
 import 'package:permission_handler/permission_handler.dart';
 
-import 'dashboard_page.dart';
 import 'payment_page.dart';
 
 class AddChallanPage extends StatefulWidget {
@@ -30,8 +28,6 @@ class _AddChallanPageState extends State<AddChallanPage> {
   bool _isSubmitting = false;
   List<ChallanType> _challanTypes = [];
   bool _isLoadingTypes = false;
-  double? _latitude;
-  double? _longitude;
 
   // (rulesInfo removed — dropdown driven only by server)
 
@@ -42,57 +38,6 @@ class _AddChallanPageState extends State<AddChallanPage> {
   void initState() {
     super.initState();
     _loadChallanTypes();
-    _determinePosition();
-  }
-
-  Future<void> _determinePosition() async {
-    try {
-      bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
-      if (!serviceEnabled) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              'Location services are disabled. Please enable them.',
-            ),
-          ),
-        );
-        return;
-      }
-
-      LocationPermission permission = await Geolocator.checkPermission();
-      if (permission == LocationPermission.denied) {
-        permission = await Geolocator.requestPermission();
-        if (permission == LocationPermission.denied) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Location permissions are denied')),
-          );
-          return;
-        }
-      }
-
-      if (permission == LocationPermission.deniedForever) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              'Location permissions are permanently denied. Please enable from settings.',
-            ),
-          ),
-        );
-        return;
-      }
-
-      final pos = await Geolocator.getCurrentPosition(
-        desiredAccuracy: LocationAccuracy.high,
-      );
-      setState(() {
-        _latitude = pos.latitude;
-        _longitude = pos.longitude;
-      });
-    } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Failed to get location: ${e.toString()}')),
-      );
-    }
   }
 
   Future<void> _loadChallanTypes() async {
@@ -179,21 +124,6 @@ class _AddChallanPageState extends State<AddChallanPage> {
       return;
     }
 
-    // Ensure we have a location before submitting
-    if (_latitude == null || _longitude == null) {
-      await _determinePosition();
-      if (_latitude == null || _longitude == null) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              'Unable to get location. Please ensure location is enabled and try again.',
-            ),
-          ),
-        );
-        return;
-      }
-    }
-
     final fullName = nameController.text.trim();
     final contactNumber = mobileController.text.trim();
     final challanName = _selectedType?.typeName ?? 'Violation';
@@ -242,8 +172,8 @@ class _AddChallanPageState extends State<AddChallanPage> {
     final wardNumber = wardController.text.trim().isNotEmpty
         ? wardController.text.trim()
         : '0';
-    final latitude = _latitude ?? 0.0;
-    final longitude = _longitude ?? 0.0;
+    final latitude = 0.0; // Default latitude since geolocation is disabled
+    final longitude = 0.0; // Default longitude since geolocation is disabled
 
     setState(() => _isSubmitting = true);
     try {
@@ -259,6 +189,7 @@ class _AddChallanPageState extends State<AddChallanPage> {
         longitude: longitude,
       );
 
+      //TODO: remove this newChallan variable
       // Add to local dashboard list using server response
       final newChallan = {
         'id': resp.id,
@@ -275,8 +206,6 @@ class _AddChallanPageState extends State<AddChallanPage> {
         'status': 'Unpaid',
         'created_at': resp.createdAt,
       };
-
-      DashboardPage.challans.add(newChallan);
 
       // If user added images locally, upload them to the server for this challan
       if (images.isNotEmpty) {
@@ -387,12 +316,7 @@ class _AddChallanPageState extends State<AddChallanPage> {
                           Navigator.push(
                             context,
                             MaterialPageRoute(
-                              builder: (_) => PaymentPage(
-                                index: DashboardPage.challans.length - 1,
-                                challan: DashboardPage.challans.isNotEmpty
-                                    ? DashboardPage.challans.last
-                                    : null,
-                              ),
+                              builder: (_) => PaymentPage(challan: newChallan),
                             ),
                           );
                         },
