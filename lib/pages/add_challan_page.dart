@@ -544,110 +544,110 @@ class _AddChallanPageState extends State<AddChallanPage> {
                       ),
                     ),
                     SizedBox(height: 12),
-                    SizedBox(
-                      height: 120,
-                      child: ListView.builder(
-                        scrollDirection: Axis.horizontal,
-                        itemCount: images.length + 1,
-                        itemBuilder: (context, index) {
-                          if (index == images.length) {
-                            return GestureDetector(
-                              onTap: () {
-                                showModalBottomSheet(
-                                  context: context,
-                                  shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.vertical(
-                                      top: Radius.circular(20),
-                                    ),
+                    GridView.builder(
+                      shrinkWrap: true,
+                      physics: NeverScrollableScrollPhysics(),
+                      itemCount: images.length + 1,
+                      gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                        crossAxisCount: 3, // 3 columns for better layout
+                        childAspectRatio: 1,
+                        mainAxisSpacing: 10,
+                        crossAxisSpacing: 10,
+                      ),
+                      itemBuilder: (context, index) {
+                        if (index == images.length) {
+                          return GestureDetector(
+                            onTap: () {
+                              showModalBottomSheet(
+                                context: context,
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.vertical(
+                                    top: Radius.circular(20),
                                   ),
-                                  builder: (context) => Container(
-                                    padding: EdgeInsets.all(20),
-                                    child: Column(
-                                      mainAxisSize: MainAxisSize.min,
-                                      children: [
-                                        ListTile(
-                                          leading: Icon(Icons.camera_alt),
-                                          title: Text("Take Photo"),
-                                          onTap: () {
-                                            Navigator.pop(context);
-                                            pickImage(ImageSource.camera);
-                                          },
-                                        ),
-                                        ListTile(
-                                          leading: Icon(Icons.photo_library),
-                                          title: Text("Choose from Gallery"),
-                                          onTap: () {
-                                            Navigator.pop(context);
-                                            pickImage(ImageSource.gallery);
-                                          },
-                                        ),
-                                      ],
-                                    ),
+                                ),
+                                builder: (context) => Container(
+                                  padding: EdgeInsets.all(20),
+                                  child: Column(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      ListTile(
+                                        leading: Icon(Icons.camera_alt),
+                                        title: Text("Take Photo"),
+                                        onTap: () {
+                                          Navigator.pop(context);
+                                          pickImage(ImageSource.camera);
+                                        },
+                                      ),
+                                      ListTile(
+                                        leading: Icon(Icons.photo_library),
+                                        title: Text("Choose from Gallery"),
+                                        onTap: () {
+                                          Navigator.pop(context);
+                                          pickImage(ImageSource.gallery);
+                                        },
+                                      ),
+                                    ],
                                   ),
-                                );
-                              },
-                              child: Container(
-                                width: 100,
-                                margin: EdgeInsets.only(right: 12),
-                                decoration: BoxDecoration(
+                                ),
+                              );
+                            },
+                            child: Container(
+                              decoration: BoxDecoration(
+                                color: Theme.of(
+                                  context,
+                                ).colorScheme.primary.withAlpha(26),
+                                borderRadius: BorderRadius.circular(12),
+                                border: Border.all(
                                   color: Theme.of(
                                     context,
-                                  ).colorScheme.primary.withAlpha(26),
-                                  borderRadius: BorderRadius.circular(12),
-                                  border: Border.all(
-                                    color: Theme.of(
-                                      context,
-                                    ).colorScheme.primary.withAlpha(77),
-                                  ),
-                                ),
-                                child: Icon(
-                                  Icons.add_photo_alternate_outlined,
-                                  color: Theme.of(context).colorScheme.primary,
-                                  size: 32,
+                                  ).colorScheme.primary.withAlpha(77),
                                 ),
                               ),
-                            );
-                          }
-                          return Stack(
-                            children: [
-                              Container(
-                                width: 100,
-                                margin: EdgeInsets.only(right: 12),
-                                decoration: BoxDecoration(
-                                  borderRadius: BorderRadius.circular(12),
-                                  image: DecorationImage(
-                                    image: FileImage(images[index]),
-                                    fit: BoxFit.cover,
-                                  ),
-                                ),
+                              child: Icon(
+                                Icons.add_photo_alternate_outlined,
+                                color: Theme.of(context).colorScheme.primary,
+                                size: 32,
                               ),
-                              Positioned(
-                                top: 4,
-                                right: 16,
-                                child: GestureDetector(
-                                  onTap: () {
-                                    setState(() {
-                                      images.removeAt(index);
-                                    });
-                                  },
-                                  child: Container(
-                                    padding: EdgeInsets.all(4),
-                                    decoration: BoxDecoration(
-                                      color: Colors.red,
-                                      shape: BoxShape.circle,
-                                    ),
-                                    child: Icon(
-                                      Icons.close,
-                                      color: Colors.white,
-                                      size: 16,
-                                    ),
-                                  ),
-                                ),
-                              ),
-                            ],
+                            ),
                           );
-                        },
-                      ),
+                        }
+                        return Stack(
+                          children: [
+                            Container(
+                              decoration: BoxDecoration(
+                                borderRadius: BorderRadius.circular(12),
+                                image: DecorationImage(
+                                  image: FileImage(images[index]),
+                                  fit: BoxFit.cover,
+                                ),
+                              ),
+                            ),
+                            Positioned(
+                              top: 4,
+                              right: 4,
+                              child: GestureDetector(
+                                onTap: () {
+                                  setState(() {
+                                    images.removeAt(index);
+                                  });
+                                },
+                                child: Container(
+                                  padding: EdgeInsets.all(4),
+                                  decoration: BoxDecoration(
+                                    color: Colors.red,
+                                    shape: BoxShape.circle,
+                                  ),
+                                  child: Icon(
+                                    Icons.close,
+                                    color: Colors.white,
+                                    size: 16,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ],
+                        );
+                      },
                     ),
                   ],
                 ),
