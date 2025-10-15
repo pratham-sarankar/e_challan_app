@@ -1,5 +1,5 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
-    package="com.example.municipal_e_challan">
+    package="e_challan.sublimeai.app">
 
     <!-- ✅ All permissions go here, directly under <manifest> -->
     <uses-permission android:name="android.permission.INTERNET"/>
@@ -8,7 +8,7 @@
     <uses-permission android:name="android.permission.CAMERA"/>
 
     <application
-        android:label="municipal_e_challan"
+        android:label="E-Challan"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher">
 
