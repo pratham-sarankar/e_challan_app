@@ -45,4 +45,23 @@ class VizpayFlutter {
     if (result == null) return null;
     return Map<String, dynamic>.from(result);
   }
+
+  static Future<Map<String, dynamic>?> startUpiTransaction({
+    required String amount,
+    required String billNumber,
+    required String sourceId,
+    String tipAmount = "",
+    bool printFlag = true,
+  }) async {
+    final result = await _channel.invokeMethod('startUpiTransaction', {
+      'amount': amount,
+      'billNumber': billNumber,
+      'sourceId': sourceId,
+      'tipAmount': tipAmount,
+      'printFlag': printFlag ? "1" : "0",
+    });
+
+    if (result == null) return null;
+    return Map<String, dynamic>.from(result);
+  }
 }

@@ -18,8 +18,12 @@ class VizpayFlutterPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, Acti
     private var pendingResult: MethodChannel.Result? = null
 
     private val REQUEST_CODE_SALE = 101
+
+    private val REQUEST_QR_SALE = 103
+
     private val PACKAGE_NAME = "com.icici.viz.verifone"
     private val SALE = "SALE"
+    private val QR = "QR"
 
     override fun onAttachedToEngine(binding: FlutterPlugin.FlutterPluginBinding) {
         channel = MethodChannel(binding.binaryMessenger, "vizpay_flutter")
@@ -55,15 +59,59 @@ class VizpayFlutterPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, Acti
     }
 
     override fun onMethodCall(call: MethodCall, result: MethodChannel.Result) {
+        if (activity == null) {
+            result.error("NO_ACTIVITY", "Plugin not attached to an Activity", null)
+            return
+        }
+        pendingResult = result
         if (call.method == "startSaleTransaction") {
-            if (activity == null) {
-                result.error("NO_ACTIVITY", "Plugin not attached to an Activity", null)
+            startSale(call.arguments as Map<*, *>)
+        } else if(call.method=="startUpiTransaction"){
+            startUpiTransaction(call.arguments as Map<*,*>)
+        }
+        else {
+            result.notImplemented()
+        }
+    }
+
+    private fun startUpiTransaction(args: Map<*,*>){
+        try{
+            val amount = args["amount"] as String
+            val billNumber = args["billNumber"] as String
+            val sourceId = args["sourceId"] as String
+            val tipAmount = args["tipAmount"] as? String ?: ""
+            val printFlag = args["printFlag"] as String
+
+            val saleRequest = JSONObject()
+            saleRequest.put("AMOUNT", amount)
+            saleRequest.put("TIP_AMOUNT", tipAmount)
+            saleRequest.put("TRAN_TYPE", QR)
+            saleRequest.put("BILL_NUMBER", billNumber)
+            saleRequest.put("PRINT_FLAG", printFlag)
+            saleRequest.put("SOURCE_ID", sourceId)
+            saleRequest.put("UDF1", "")
+            saleRequest.put("UDF2", "")
+            saleRequest.put("UDF3", "")
+            saleRequest.put("UDF4", "")
+            saleRequest.put("UDF5", "")
+
+            Log.d("VizpayFlutter", "QR Request: $saleRequest")
+
+            val intent = activity!!.packageManager.getLaunchIntentForPackage(PACKAGE_NAME)
+            if (intent == null) {
+                pendingResult?.error("APP_NOT_INSTALLED", "ICICI Verifone app not installed", null)
+                pendingResult = null
                 return
             }
-            pendingResult = result
-            startSale(call.arguments as Map<*, *>)
-        } else {
-            result.notImplemented()
+
+            intent.flags = 0
+            intent.putExtra("REQUEST_TYPE", QR)
+            intent.putExtra("DATA", saleRequest.toString())
+
+            activity!!.startActivityForResult(intent, REQUEST_QR_SALE)
+        }catch (e: Exception){
+            pendingResult?.error("QR_ERROR", e.localizedMessage, null)
+            pendingResult = null
         }
     }
 

@@ -214,7 +214,7 @@ class _PaymentPageState extends State<PaymentPage> {
               title: "Card Payment",
               subtitle: "Pay using debit/credit card via ICICI POS",
               color: Colors.blue,
-              onTap: () => _startVizpaySale(context),
+              onTap: () => _startCardPayment(context),
             ),
 
             const SizedBox(height: 12),
@@ -225,7 +225,7 @@ class _PaymentPageState extends State<PaymentPage> {
               title: "UPI Payment",
               subtitle: "Pay using QR code scanning",
               color: Colors.teal,
-              onTap: () => _processUpiPayment(context),
+              onTap: () => _startUpiPayment(context),
             ),
 
             const SizedBox(height: 12),
@@ -662,64 +662,279 @@ class _PaymentPageState extends State<PaymentPage> {
     }
   }
 
-  /// Start Vizpay sale transaction (alias to _startCardPayment)
-  void _startVizpaySale(BuildContext context) => _startCardPayment(context);
+  /// Start card payment using PaymentService directly
+  Future<void> _startUpiPayment(BuildContext context) async {
+    try {
+      setState(() {
+        _isProcessing = true;
+        _processingMessage = 'Initiating UPI payment...';
+        _errorMessage = null;
+      });
 
-  /// UPI and cash handlers (simple simulations)
-  void _processUpiPayment(BuildContext context) async {
-    setState(() {
-      _isProcessing = true;
-      _processingMessage = 'Preparing UPI payment...';
-      _errorMessage = null;
-    });
-    await Future.delayed(const Duration(seconds: 2));
-    final transaction = PaymentTransaction(
-      transactionId: _generateTransactionId(),
-      challanId: widget.challan.challanId.toString(),
-      amount: widget.challan.fineAmount.toString(),
-      paymentMethod: 'UPI',
-      status: 'COMPLETED',
-      timestamp: DateTime.now(),
-      receiptNumber: 'UPI_${DateTime.now().millisecondsSinceEpoch}',
-    );
-    setState(() {
-      _transaction = transaction;
-      _isProcessing = false;
-    });
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('UPI payment completed: ${transaction.receiptNumber}'),
-        backgroundColor: Colors.green,
-      ),
-    );
+      // Parse amount to ensure proper format
+      final double amountValue = widget.challan.fineAmount;
+      final String formattedAmount = amountValue.toStringAsFixed(2);
+
+      // Use transaction ID as bill number and challan ID as source ID as requested
+      final transactionId = 'TXN_${DateTime.now().millisecondsSinceEpoch}';
+      final billNumber = transactionId; // Transaction ID as bill number
+      final sourceId = widget.challan.challanId
+          .toString(); // Challan ID as source ID
+
+      setState(() {
+        _processingMessage = 'Processing UPI payment...';
+      });
+
+      // Start VizPay sale transaction
+      final response = await VizpayFlutter.startUpiTransaction(
+        amount: formattedAmount,
+        billNumber: billNumber,
+        sourceId: sourceId,
+        tipAmount: "0.00",
+        printFlag: true,
+      );
+
+      if (response != null) {
+        final statusCode = response["STATUS_CODE"] as String?;
+        final statusMsg = response["STATUS_MSG"] as String?;
+        final receiptData = response["RECEIPT_DATA"] as String?;
+
+        if (statusCode == "00") {
+          // Payment successful - create transaction record
+          setState(() {
+            _processingMessage =
+                'Payment successful! Creating transaction record...';
+          });
+
+          try {
+            final transactionData = await _apiService.createTransaction(
+              challanId: widget.challan.challanId,
+              orderStatus: 'paid',
+              orderId: transactionId,
+              paymentMethod: 'UPI',
+              paymentReference: receiptData,
+              amount: amountValue,
+              notes: 'UPI payment via ICICI POS - VizPay',
+            );
+
+            // Create successful payment transaction
+            final transaction = PaymentTransaction(
+              transactionId: transactionId,
+              challanId: widget.challan.challanId.toString(),
+              amount: formattedAmount,
+              paymentMethod: 'UPI',
+              status: 'SUCCESS',
+              timestamp: DateTime.now(),
+              posResponse: PosResponse(
+                statusCode: statusCode ?? '00',
+                statusMessage: statusMsg ?? 'Approved',
+                receiptData: receiptData != null
+                    ? {'receipt': receiptData}
+                    : null,
+                rawResponse: response,
+              ),
+              receiptNumber: transactionData['id']?.toString(),
+            );
+
+            setState(() {
+              _isProcessing = false;
+              _transaction = transaction;
+              _processingMessage = '';
+            });
+
+            // Show success message
+            if (mounted) {
+              showDialog(
+                context: context,
+                barrierDismissible: false,
+                builder: (context) {
+                  return AlertDialog(
+                    title: const Text('Payment Successful'),
+                    content: Text(
+                      'Payment of ₹$formattedAmount was successful.\nReceipt Number: ${transaction.receiptNumber}',
+                    ),
+                    actions: [
+                      FilledButton(
+                        onPressed: () {
+                          // Navigate to home/dashboard page
+                          Navigator.of(
+                            context,
+                          ).popUntil((route) => route.isFirst);
+                        },
+                        child: const Text('OK'),
+                      ),
+                    ],
+                  );
+                },
+              );
+            }
+          } catch (e) {
+            // Payment was successful but transaction creation failed
+            print('Transaction creation failed: $e');
+            setState(() {
+              _isProcessing = false;
+              _errorMessage =
+                  'Payment successful but failed to record transaction: ${e.toString()}';
+            });
+          }
+        } else {
+          // Payment failed
+          setState(() {
+            _isProcessing = false;
+            _errorMessage = 'Payment failed: ${statusMsg ?? 'Unknown error'}';
+          });
+
+          // Try to create a failed transaction record
+          try {
+            await _apiService.createTransaction(
+              challanId: widget.challan.challanId,
+              orderStatus: 'failed',
+              orderId: transactionId,
+              paymentMethod: 'CARD',
+              paymentReference: receiptData,
+              amount: amountValue,
+              notes:
+                  'Failed card payment via ICICI POS - VizPay: ${statusMsg ?? 'Unknown error'}',
+            );
+          } catch (e) {
+            print('Failed to record failed transaction: $e');
+          }
+        }
+      } else {
+        setState(() {
+          _isProcessing = false;
+          _errorMessage =
+              'No response from payment app. Please ensure ICICI VizPay app is installed.';
+        });
+      }
+    } catch (e) {
+      print('Card payment error: $e');
+      setState(() {
+        _isProcessing = false;
+        _errorMessage = 'Payment error: ${e.toString()}';
+      });
+
+      // Try to create a failed transaction record
+      try {
+        final transactionId = 'TXN_${DateTime.now().millisecondsSinceEpoch}';
+        await _apiService.createTransaction(
+          challanId: widget.challan.challanId,
+          orderStatus: 'failed',
+          orderId: transactionId,
+          paymentMethod: 'CARD',
+          amount: widget.challan.fineAmount,
+          notes: 'Failed card payment due to error: ${e.toString()}',
+        );
+      } catch (transError) {
+        print('Failed to record error transaction: $transError');
+      }
+    }
   }
 
   void _processCashPayment(BuildContext context) async {
-    setState(() {
-      _isProcessing = true;
-      _processingMessage = 'Processing cash payment...';
-      _errorMessage = null;
-    });
-    await Future.delayed(const Duration(seconds: 1));
-    final transaction = PaymentTransaction(
-      transactionId: _generateTransactionId(),
-      challanId: widget.challan.challanId.toString(),
-      amount: widget.challan.fineAmount.toString(),
-      paymentMethod: 'CASH',
-      status: 'COMPLETED',
-      timestamp: DateTime.now(),
-      receiptNumber: 'CASH_${DateTime.now().millisecondsSinceEpoch}',
-    );
-    setState(() {
-      _transaction = transaction;
-      _isProcessing = false;
-    });
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('Cash payment recorded: ${transaction.receiptNumber}'),
-        backgroundColor: Colors.green,
-      ),
-    );
+    try {
+      setState(() {
+        _isProcessing = true;
+        _processingMessage = 'Processing cash payment...';
+        _errorMessage = null;
+      });
+
+      // Parse amount to ensure proper format
+      final double amountValue = widget.challan.fineAmount;
+      final String formattedAmount = amountValue.toStringAsFixed(2);
+
+      // Generate transaction ID
+      final transactionId = 'TXN_${DateTime.now().millisecondsSinceEpoch}';
+
+      setState(() {
+        _processingMessage = 'Recording cash payment transaction...';
+      });
+
+      // Create transaction record in the API
+      try {
+        final transactionData = await _apiService.createTransaction(
+          challanId: widget.challan.challanId,
+          orderStatus: 'paid',
+          orderId: transactionId,
+          paymentMethod: 'CASH',
+          amount: amountValue,
+          notes: 'Cash payment received',
+        );
+
+        // Create successful payment transaction
+        final transaction = PaymentTransaction(
+          transactionId: transactionId,
+          challanId: widget.challan.challanId.toString(),
+          amount: formattedAmount,
+          paymentMethod: 'CASH',
+          status: 'SUCCESS',
+          timestamp: DateTime.now(),
+          receiptNumber:
+              transactionData['id']?.toString() ??
+              'CASH_${DateTime.now().millisecondsSinceEpoch}',
+        );
+
+        setState(() {
+          _isProcessing = false;
+          _transaction = transaction;
+          _processingMessage = '';
+        });
+
+        // Show success dialog
+        if (mounted) {
+          showDialog(
+            context: context,
+            barrierDismissible: false,
+            builder: (context) {
+              return AlertDialog(
+                title: const Text('Payment Successful'),
+                content: Text(
+                  'Cash payment of ₹$formattedAmount was successful.\nReceipt Number: ${transaction.receiptNumber}',
+                ),
+                actions: [
+                  FilledButton(
+                    onPressed: () {
+                      // Navigate to home/dashboard page
+                      Navigator.of(context).popUntil((route) => route.isFirst);
+                    },
+                    child: const Text('OK'),
+                  ),
+                ],
+              );
+            },
+          );
+        }
+      } catch (e) {
+        // Transaction creation failed
+        print('Cash transaction creation failed: $e');
+        setState(() {
+          _isProcessing = false;
+          _errorMessage =
+              'Failed to record cash payment transaction: ${e.toString()}';
+        });
+      }
+    } catch (e) {
+      print('Cash payment error: $e');
+      setState(() {
+        _isProcessing = false;
+        _errorMessage = 'Cash payment error: ${e.toString()}';
+      });
+
+      // Try to create a failed transaction record
+      try {
+        final transactionId = 'TXN_${DateTime.now().millisecondsSinceEpoch}';
+        await _apiService.createTransaction(
+          challanId: widget.challan.challanId,
+          orderStatus: 'failed',
+          orderId: transactionId,
+          paymentMethod: 'CASH',
+          amount: widget.challan.fineAmount,
+          notes: 'Failed cash payment due to error: ${e.toString()}',
+        );
+      } catch (transError) {
+        print('Failed to record error transaction: $transError');
+      }
+    }
   }
 
   String _generateTransactionId() {
@@ -727,63 +942,4 @@ class _PaymentPageState extends State<PaymentPage> {
     final random = (timestamp % 10000).toString().padLeft(4, '0');
     return 'TXN_${timestamp}_$random';
   }
-}
-
-/// Helper method to build a receipt row (enhanced for better alignment and styling, with overflow prevention)
-Widget _buildReceiptRow({
-  required String label,
-  required String value,
-  bool isStatus = false,
-  bool isTotal = false,
-  IconData? icon,
-}) {
-  return Padding(
-    padding: const EdgeInsets.symmetric(vertical: 8.0),
-    child: Row(
-      crossAxisAlignment: CrossAxisAlignment.center,
-      children: [
-        Expanded(
-          flex: 2,
-          child: Row(
-            children: [
-              if (icon != null) ...[
-                Icon(icon, size: 14, color: Colors.grey[600]),
-                SizedBox(width: 6),
-              ],
-              Flexible(
-                child: Text(
-                  label,
-                  style: TextStyle(
-                    fontSize: 14,
-                    fontWeight: isTotal ? FontWeight.bold : FontWeight.w500,
-                    color: Colors.grey[800],
-                  ),
-                  overflow: TextOverflow.ellipsis,
-                  maxLines: 1,
-                ),
-              ),
-            ],
-          ),
-        ),
-        Expanded(
-          flex: 3,
-          child: Text(
-            value,
-            style: TextStyle(
-              fontSize: 14,
-              fontWeight: isTotal ? FontWeight.bold : FontWeight.w600,
-              color: isStatus
-                  ? Colors.green[700]
-                  : isTotal
-                  ? Colors.black87
-                  : Colors.grey[700],
-            ),
-            textAlign: TextAlign.right,
-            overflow: TextOverflow.ellipsis,
-            maxLines: 1,
-          ),
-        ),
-      ],
-    ),
-  );
 }

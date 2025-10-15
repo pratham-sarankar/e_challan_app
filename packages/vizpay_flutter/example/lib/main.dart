@@ -1,7 +1,7 @@
-import 'package:flutter/foundation.dart';
-import 'package:flutter/material.dart';
 import 'dart:async';
 
+import 'package:flutter/foundation.dart';
+import 'package:flutter/material.dart';
 import 'package:vizpay_flutter/vizpay_flutter.dart';
 
 void main() {
@@ -28,7 +28,7 @@ class _MyAppState extends State<MyApp> {
 
   Future<void> makeSale() async {
     try {
-      final response = await VizpayFlutter.startSaleTransaction(
+      final response = await VizpayFlutter.startUpiTransaction(
         amount: "1.00",
         billNumber: "BILL123",
         sourceId: "SOURCE9876",
