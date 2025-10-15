@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "995006198955",
+    "project_id": "sublimeai-e-challan-app",
+    "storage_bucket": "sublimeai-e-challan-app.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:995006198955:android:3d3860973054a06e34f3ee",
+        "android_client_info": {
+          "package_name": "e_challan.sublimeai.app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBT2RnjgOV1PMcdhOUDg9wZ9rqj6s8ca-Y"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

@@ -1,0 +1,43 @@
+# This file contains the fastlane.tools configuration
+# You can find the documentation at https://docs.fastlane.tools
+#
+# For a list of all available actions, check out
+#
+#     https://docs.fastlane.tools/actions
+#
+# For a list of all available plugins, check out
+#
+#     https://docs.fastlane.tools/plugins/available-plugins
+#
+
+# Uncomment the line if you want fastlane to automatically update itself
+# update_fastlane
+
+default_platform(:android)
+
+platform :android do
+  desc "Build release APK"
+  lane :build_release do
+    # Clean project
+    sh "flutter clean"
+
+    # Get dependencies
+    sh "flutter pub get"
+
+    # Build the release APK (unsigned)
+    sh "flutter build apk --release"
+
+    UI.message("✅ APK built successfully and stored at build/app/outputs/flutter-apk/app-release.apk")
+  end
+
+  desc "Distribute APK using Firebase App Distribution"
+  lane :distribute_apk do
+    firebase_app_distribution(
+      app: "1:995006198955:android:3d3860973054a06e34f3ee",  
+      android_artifact_type: "APK",
+      android_artifact_path: "../build/app/outputs/flutter-apk/app-release.apk",
+      groups: "internal-testers", 
+      service_credentials_file: "./serviceAccountKey.json"
+    )
+  end  
+end
