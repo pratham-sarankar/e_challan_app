@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'package:shimmer/shimmer.dart';
 import 'package:municipal_e_challan/models/challan_response.dart';
 import 'package:municipal_e_challan/pages/payment_page.dart';
 import 'package:municipal_e_challan/services/api_services.dart';
@@ -139,20 +140,111 @@ class ChallanDetailsPageState extends State<ChallanDetailsPage> {
     return Container(color: Colors.grey[200]);
   }
 
+  Widget _buildShimmerEffect() {
+    return Shimmer.fromColors(
+      baseColor: Colors.grey[300]!,
+      highlightColor: Colors.grey[100]!,
+      child: Column(
+        children: List.generate(
+          3,
+          (index) => Container(
+            margin: EdgeInsets.only(bottom: 12),
+            child: Card(
+              elevation: 0,
+              color: Colors.white,
+              child: Container(
+                height: 80,
+                padding: EdgeInsets.all(12),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Container(
+                      height: 16,
+                      width: 120,
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(4),
+                      ),
+                    ),
+                    SizedBox(height: 8),
+                    Container(
+                      height: 12,
+                      width: 200,
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(4),
+                      ),
+                    ),
+                    SizedBox(height: 4),
+                    Container(
+                      height: 12,
+                      width: 150,
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(4),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildImageShimmer() {
+    return Wrap(
+      spacing: 8,
+      runSpacing: 8,
+      children: List.generate(
+        4,
+        (index) => Shimmer.fromColors(
+          baseColor: Colors.grey[300]!,
+          highlightColor: Colors.grey[100]!,
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(8),
+            child: Container(width: 100, height: 100, color: Colors.white),
+          ),
+        ),
+      ),
+    );
+  }
+
   Widget _buildTransactionsSection() {
     if (_isTransLoading) {
       return Padding(
         padding: const EdgeInsets.symmetric(vertical: 12.0),
-        child: Center(child: CircularProgressIndicator()),
+        child: _buildShimmerEffect(),
       );
     }
 
     if (_transError != null) {
       return Padding(
         padding: const EdgeInsets.symmetric(vertical: 12.0),
-        child: Text(
-          'Failed to load transactions',
-          style: TextStyle(color: Colors.red),
+        child: Container(
+          padding: EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: Colors.red[50],
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: Colors.red[200]!),
+          ),
+          child: Row(
+            children: [
+              Icon(Icons.error_outline, color: Colors.red[600], size: 20),
+              SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  'Failed to load transactions',
+                  style: TextStyle(
+                    color: Colors.red[600],
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ),
+            ],
+          ),
         ),
       );
     }
@@ -161,12 +253,40 @@ class ChallanDetailsPageState extends State<ChallanDetailsPage> {
       return Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          SizedBox(height: 8),
-          Text(
-            'No transactions found for this challan.',
-            style: TextStyle(color: Colors.grey[700]),
+          SizedBox(height: 16),
+          Container(
+            width: double.infinity,
+            padding: EdgeInsets.all(20),
+            decoration: BoxDecoration(
+              color: Colors.grey[50],
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: Colors.grey[200]!),
+            ),
+            child: Column(
+              children: [
+                Icon(
+                  Icons.receipt_long_outlined,
+                  size: 48,
+                  color: Colors.grey[400],
+                ),
+                SizedBox(height: 12),
+                Text(
+                  'No transactions found',
+                  style: TextStyle(
+                    color: Colors.grey[600],
+                    fontWeight: FontWeight.w500,
+                    fontSize: 16,
+                  ),
+                ),
+                SizedBox(height: 4),
+                Text(
+                  'This challan has no payment transactions yet.',
+                  style: TextStyle(color: Colors.grey[500], fontSize: 14),
+                ),
+              ],
+            ),
           ),
-          SizedBox(height: 6),
+          SizedBox(height: 16),
         ],
       );
     }
@@ -174,27 +294,46 @@ class ChallanDetailsPageState extends State<ChallanDetailsPage> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        SizedBox(height: 8),
+        SizedBox(height: 16),
+
         // Transaction Summary
         if (_statusSummary != null && _statusSummary!.isNotEmpty)
           Container(
-            margin: EdgeInsets.only(bottom: 12),
-            padding: EdgeInsets.all(12),
+            margin: EdgeInsets.only(bottom: 20),
+            padding: EdgeInsets.all(16),
             decoration: BoxDecoration(
-              color: Colors.grey[50],
-              borderRadius: BorderRadius.circular(8),
-              border: Border.all(color: Colors.grey[200]!),
+              gradient: LinearGradient(
+                colors: [Colors.blue[50]!, Colors.blue[100]!],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              ),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: Colors.blue[200]!),
             ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  'Transaction Summary',
-                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                Row(
+                  children: [
+                    Icon(
+                      Icons.analytics_outlined,
+                      color: Colors.blue[600],
+                      size: 20,
+                    ),
+                    SizedBox(width: 8),
+                    Text(
+                      'Transaction Summary',
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 15,
+                        color: Colors.blue[800],
+                      ),
+                    ),
+                  ],
                 ),
-                SizedBox(height: 8),
+                SizedBox(height: 12),
                 Wrap(
-                  spacing: 12,
+                  spacing: 8,
                   runSpacing: 8,
                   children: _statusSummary!.entries.map((entry) {
                     Color statusColor;
@@ -224,15 +363,13 @@ class ChallanDetailsPageState extends State<ChallanDetailsPage> {
 
                     return Container(
                       padding: EdgeInsets.symmetric(
-                        horizontal: 10,
-                        vertical: 6,
+                        horizontal: 12,
+                        vertical: 8,
                       ),
                       decoration: BoxDecoration(
-                        color: statusColor.withValues(alpha: 0.1),
-                        borderRadius: BorderRadius.circular(16),
-                        border: Border.all(
-                          color: statusColor.withValues(alpha: 0.3),
-                        ),
+                        color: statusColor.withOpacity(0.1),
+                        borderRadius: BorderRadius.circular(20),
+                        border: Border.all(color: statusColor.withOpacity(0.3)),
                       ),
                       child: Row(
                         mainAxisSize: MainAxisSize.min,
@@ -245,13 +382,13 @@ class ChallanDetailsPageState extends State<ChallanDetailsPage> {
                               shape: BoxShape.circle,
                             ),
                           ),
-                          SizedBox(width: 6),
+                          SizedBox(width: 8),
                           Text(
                             '$statusLabel: ${entry.value}',
                             style: TextStyle(
                               color: statusColor,
                               fontWeight: FontWeight.w600,
-                              fontSize: 12,
+                              fontSize: 13,
                             ),
                           ),
                         ],
@@ -262,30 +399,78 @@ class ChallanDetailsPageState extends State<ChallanDetailsPage> {
               ],
             ),
           ),
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            Text(
-              'Total Amount: ₹${_totalAmount.toString()}',
-              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
-            ),
-            Text(
-              'Transactions: $_transactionCount',
-              style: TextStyle(color: Colors.grey[600], fontSize: 13),
-            ),
-          ],
+
+        // Total amount and count
+        Container(
+          padding: EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: Colors.grey[50],
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: Colors.grey[200]!),
+          ),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Total Amount',
+                    style: TextStyle(
+                      color: Colors.grey[600],
+                      fontSize: 12,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                  SizedBox(height: 4),
+                  Text(
+                    '₹${_totalAmount.toString()}',
+                    style: TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 18,
+                      color: Colors.green[600],
+                    ),
+                  ),
+                ],
+              ),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  Text(
+                    'Transactions',
+                    style: TextStyle(
+                      color: Colors.grey[600],
+                      fontSize: 12,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                  SizedBox(height: 4),
+                  Text(
+                    '$_transactionCount',
+                    style: TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 18,
+                      color: Colors.blue[600],
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
         ),
-        SizedBox(height: 12),
+
+        SizedBox(height: 16),
+
+        // Transactions list
         ListView.separated(
           shrinkWrap: true,
           physics: NeverScrollableScrollPhysics(),
           itemCount: _transactions.length,
-          separatorBuilder: (_, __) => SizedBox(height: 4),
+          separatorBuilder: (_, __) => SizedBox(height: 8),
           itemBuilder: (ctx, i) {
             final tx = _transactions[i];
             final amt =
                 tx['amount'] ?? tx['paid_amount'] ?? tx['payment_amount'] ?? '';
-            // Use order_status from API response as the primary status field
             final status =
                 tx['order_status'] ??
                 tx['status'] ??
@@ -335,112 +520,86 @@ class ChallanDetailsPageState extends State<ChallanDetailsPage> {
                 statusText = status.toString().toUpperCase();
             }
 
-            return Card(
-              margin: EdgeInsets.symmetric(vertical: 4, horizontal: 0),
-              elevation: 1,
-              child: ListTile(
-                title: Row(
-                  children: [
-                    Text(
-                      '₹${amt.toString()}',
-                      style: TextStyle(
-                        fontWeight: FontWeight.bold,
-                        fontSize: 16,
-                      ),
-                    ),
-                    Spacer(),
-                    Container(
-                      padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                      decoration: BoxDecoration(
-                        color: statusColor.withValues(alpha: 0.1),
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(
-                          color: statusColor.withValues(alpha: 0.3),
-                        ),
-                      ),
-                      child: Text(
-                        statusText,
-                        style: TextStyle(
-                          color: statusColor,
-                          fontWeight: FontWeight.bold,
-                          fontSize: 12,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-                subtitle: Column(
+            return Container(
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: Colors.grey[200]!),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.grey.withOpacity(0.05),
+                    spreadRadius: 1,
+                    blurRadius: 4,
+                    offset: Offset(0, 1),
+                  ),
+                ],
+              ),
+              child: Padding(
+                padding: EdgeInsets.all(16),
+                child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    if (method.toString().isNotEmpty)
-                      Padding(
-                        padding: EdgeInsets.only(top: 4),
-                        child: Row(
-                          children: [
-                            Icon(
-                              Icons.payment,
-                              size: 14,
-                              color: Colors.grey[600],
-                            ),
-                            SizedBox(width: 4),
-                            Text(
-                              method.toString(),
-                              style: TextStyle(
-                                fontSize: 13,
-                                color: Colors.grey[700],
-                              ),
-                            ),
-                          ],
+                    // Amount and status row
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text(
+                          '₹${amt.toString()}',
+                          style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 18,
+                            color: Colors.grey[800],
+                          ),
                         ),
+                        Container(
+                          padding: EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 6,
+                          ),
+                          decoration: BoxDecoration(
+                            color: statusColor.withOpacity(0.1),
+                            borderRadius: BorderRadius.circular(16),
+                            border: Border.all(
+                              color: statusColor.withOpacity(0.3),
+                            ),
+                          ),
+                          child: Text(
+                            statusText,
+                            style: TextStyle(
+                              color: statusColor,
+                              fontWeight: FontWeight.bold,
+                              fontSize: 12,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+
+                    SizedBox(height: 12),
+
+                    // Transaction details
+                    if (method.toString().isNotEmpty)
+                      _buildTransactionDetail(
+                        Icons.payment,
+                        'Payment Method',
+                        method.toString(),
                       ),
                     if (dateStr.isNotEmpty)
-                      Padding(
-                        padding: EdgeInsets.only(top: 2),
-                        child: Row(
-                          children: [
-                            Icon(
-                              Icons.access_time,
-                              size: 14,
-                              color: Colors.grey[600],
-                            ),
-                            SizedBox(width: 4),
-                            Text(
-                              dateStr,
-                              style: TextStyle(
-                                fontSize: 13,
-                                color: Colors.grey[700],
-                              ),
-                            ),
-                          ],
-                        ),
+                      _buildTransactionDetail(
+                        Icons.access_time,
+                        'Date & Time',
+                        dateStr,
                       ),
                     if (orderId.isNotEmpty)
-                      Padding(
-                        padding: EdgeInsets.only(top: 2),
-                        child: Row(
-                          children: [
-                            Icon(
-                              Icons.receipt,
-                              size: 14,
-                              color: Colors.grey[600],
-                            ),
-                            SizedBox(width: 4),
-                            Text(
-                              'Order: $orderId',
-                              style: TextStyle(
-                                fontSize: 12,
-                                color: Colors.grey[600],
-                              ),
-                            ),
-                          ],
-                        ),
+                      _buildTransactionDetail(
+                        Icons.receipt,
+                        'Order ID',
+                        orderId,
                       ),
-                    Padding(
-                      padding: EdgeInsets.only(top: 2),
-                      child: Text(
-                        'Transaction ID: #${id.toString()}',
-                        style: TextStyle(fontSize: 11, color: Colors.grey[500]),
-                      ),
+                    _buildTransactionDetail(
+                      Icons.tag,
+                      'Transaction ID',
+                      '#${id.toString()}',
                     ),
                   ],
                 ),
@@ -452,38 +611,33 @@ class ChallanDetailsPageState extends State<ChallanDetailsPage> {
     );
   }
 
-  TableRow _buildTableRow(
-    String label,
-    dynamic value, {
-    bool isStatus = false,
-  }) {
-    final String text = value?.toString() ?? '-';
-    final bool paid = text.toLowerCase() == 'paid';
-    return TableRow(
-      children: [
-        Padding(
-          padding: EdgeInsets.all(12),
-          child: Text(
-            label,
+  Widget _buildTransactionDetail(IconData icon, String label, String value) {
+    return Padding(
+      padding: EdgeInsets.only(bottom: 8),
+      child: Row(
+        children: [
+          Icon(icon, size: 16, color: Colors.grey[600]),
+          SizedBox(width: 8),
+          Text(
+            '$label: ',
             style: TextStyle(
-              fontWeight: FontWeight.bold,
-              color: Colors.grey.shade700,
+              fontSize: 13,
+              color: Colors.grey[600],
+              fontWeight: FontWeight.w500,
             ),
           ),
-        ),
-        Padding(
-          padding: EdgeInsets.all(12),
-          child: Text(
-            text,
-            style: TextStyle(
-              fontWeight: isStatus ? FontWeight.bold : FontWeight.normal,
-              color: isStatus
-                  ? (paid ? Colors.green : Colors.orange)
-                  : Colors.black87,
+          Expanded(
+            child: Text(
+              value,
+              style: TextStyle(
+                fontSize: 13,
+                color: Colors.grey[700],
+                fontWeight: FontWeight.w400,
+              ),
             ),
           ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 
@@ -492,102 +646,268 @@ class ChallanDetailsPageState extends State<ChallanDetailsPage> {
     final hasEvidence = widget.challan.imageUrls.isNotEmpty;
 
     return Scaffold(
-      appBar: AppBar(title: Text('Challan Details')),
+      backgroundColor: Colors.grey[50],
+      appBar: AppBar(
+        title: Text(
+          'Challan Details',
+          style: TextStyle(fontWeight: FontWeight.w600),
+        ),
+        // backgroundColor: Colors.white,
+        // elevation: 0,
+        // shadowColor: Colors.grey.withOpacity(0.1),
+        // surfaceTintColor: Colors.transparent,
+      ),
       body: Stack(
         children: [
           SingleChildScrollView(
             padding: EdgeInsets.all(20),
             child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
+                // Challan Info Card
                 Container(
+                  width: double.infinity,
                   decoration: BoxDecoration(
-                    border: Border.all(color: Colors.grey.shade200),
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Table(
-                    columnWidths: {
-                      0: FlexColumnWidth(1.5),
-                      1: FlexColumnWidth(2.5),
-                    },
-                    children: [
-                      _buildTableRow(
-                        'Challan ID:',
-                        '#${widget.challan.challanId}',
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(16),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.grey.withOpacity(0.1),
+                        spreadRadius: 2,
+                        blurRadius: 8,
+                        offset: Offset(0, 2),
                       ),
-                      _buildTableRow('Date', widget.challan.createdAt),
-                      _buildTableRow('Name', widget.challan.fullName),
-                      _buildTableRow('Mobile', widget.challan.contactNumber),
-                      // TODO: Fetch challan type and create a global provider so we can access it from anywhere
-                      // Right now we have only the challanTypeId
-                      // _buildTableRow('Rule Violated', widget.challan.challanTypeId),
-                      _buildTableRow(
-                        'Fine Amount',
-                        '₹${widget.challan.fineAmount}',
-                      ),
-                      // TODO: check if the API returns notes or description, if yes, display it here.
-                      // _buildTableRow('Notes', widget.challan.notes ?? '-'),
                     ],
                   ),
-                ),
-                SizedBox(height: 20),
-                if (hasEvidence) ...[
-                  Text(
-                    'EVIDENCE IMAGES',
-                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
-                  ),
-                  SizedBox(height: 10),
-                  Wrap(
-                    spacing: 8,
-                    runSpacing: 8,
+                  child: Column(
                     children: [
-                      ...widget.challan.imageUrls.map<Widget>(
-                        (img) => ClipRRect(
-                          borderRadius: BorderRadius.circular(8),
-                          child: SizedBox(
-                            width: 100,
-                            height: 100,
-                            child: _buildImageWidget(img),
+                      // Header with challan ID
+                      Container(
+                        width: double.infinity,
+                        padding: EdgeInsets.all(20),
+                        decoration: BoxDecoration(
+                          color: Theme.of(context).colorScheme.primary,
+                          borderRadius: BorderRadius.only(
+                            topLeft: Radius.circular(16),
+                            topRight: Radius.circular(16),
                           ),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Challan ID',
+                              style: TextStyle(
+                                color: Colors.white70,
+                                fontSize: 14,
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                            SizedBox(height: 4),
+                            Text(
+                              '#${widget.challan.challanId}',
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontSize: 24,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      // Details table
+                      Padding(
+                        padding: EdgeInsets.all(20),
+                        child: Column(
+                          children: [
+                            _buildDetailRow(
+                              'Date',
+                              widget.challan.createdAt,
+                              Icons.calendar_today,
+                            ),
+                            _buildDetailRow(
+                              'Name',
+                              widget.challan.fullName,
+                              Icons.person,
+                            ),
+                            _buildDetailRow(
+                              'Mobile',
+                              widget.challan.contactNumber,
+                              Icons.phone,
+                            ),
+                            _buildDetailRow(
+                              'Amount',
+                              '₹${widget.challan.fineAmount}',
+                              Icons.account_balance_wallet,
+                              valueColor: Colors.red[600],
+                            ),
+                          ],
                         ),
                       ),
                     ],
                   ),
+                ),
+
+                SizedBox(height: 24),
+
+                // Evidence Images Section
+                if (hasEvidence || _isLoading) ...[
+                  Container(
+                    width: double.infinity,
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(16),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.grey.withOpacity(0.1),
+                          spreadRadius: 2,
+                          blurRadius: 8,
+                          offset: Offset(0, 2),
+                        ),
+                      ],
+                    ),
+                    padding: EdgeInsets.all(20),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Icon(
+                              Icons.photo_library,
+                              color: Colors.blue[600],
+                              size: 24,
+                            ),
+                            SizedBox(width: 8),
+                            Text(
+                              'EVIDENCE IMAGES',
+                              style: TextStyle(
+                                fontWeight: FontWeight.bold,
+                                fontSize: 16,
+                                color: Colors.grey[800],
+                              ),
+                            ),
+                          ],
+                        ),
+                        SizedBox(height: 16),
+                        if (_isLoading)
+                          _buildImageShimmer()
+                        else
+                          Wrap(
+                            spacing: 12,
+                            runSpacing: 12,
+                            children: [
+                              ...widget.challan.imageUrls.map<Widget>(
+                                (img) => Container(
+                                  decoration: BoxDecoration(
+                                    borderRadius: BorderRadius.circular(12),
+                                    boxShadow: [
+                                      BoxShadow(
+                                        color: Colors.grey.withOpacity(0.2),
+                                        spreadRadius: 1,
+                                        blurRadius: 4,
+                                        offset: Offset(0, 2),
+                                      ),
+                                    ],
+                                  ),
+                                  child: ClipRRect(
+                                    borderRadius: BorderRadius.circular(12),
+                                    child: SizedBox(
+                                      width: 110,
+                                      height: 110,
+                                      child: _buildImageWidget(img),
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                      ],
+                    ),
+                  ),
+                  SizedBox(height: 24),
                 ],
-                SizedBox(height: 20),
+
                 // Transactions section
                 Container(
                   width: double.infinity,
                   decoration: BoxDecoration(
-                    border: Border.all(color: Colors.grey.shade200),
-                    borderRadius: BorderRadius.circular(12),
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(16),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.grey.withOpacity(0.1),
+                        spreadRadius: 2,
+                        blurRadius: 8,
+                        offset: Offset(0, 2),
+                      ),
+                    ],
                   ),
-                  padding: EdgeInsets.all(12),
+                  padding: EdgeInsets.all(20),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(
-                        'TRANSACTIONS',
-                        style: TextStyle(
-                          fontWeight: FontWeight.bold,
-                          fontSize: 16,
-                        ),
+                      Row(
+                        children: [
+                          Icon(
+                            Icons.receipt_long,
+                            color: Colors.blue[600],
+                            size: 24,
+                          ),
+                          SizedBox(width: 8),
+                          Text(
+                            'TRANSACTIONS',
+                            style: TextStyle(
+                              fontWeight: FontWeight.bold,
+                              fontSize: 16,
+                              color: Colors.grey[800],
+                            ),
+                          ),
+                        ],
                       ),
                       _buildTransactionsSection(),
                     ],
                   ),
                 ),
-                SizedBox(height: 40),
+
+                SizedBox(height: 32),
+
+                // Pay Now Button
                 if (_totalAmount < widget.challan.fineAmount)
-                  SizedBox(
+                  Container(
                     width: double.infinity,
+                    height: 56,
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        colors: [Colors.green[600]!, Colors.green[700]!],
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                      ),
+                      borderRadius: BorderRadius.circular(16),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.green.withOpacity(0.3),
+                          spreadRadius: 2,
+                          blurRadius: 8,
+                          offset: Offset(0, 4),
+                        ),
+                      ],
+                    ),
                     child: ElevatedButton.icon(
-                      icon: Icon(Icons.payment, size: 20),
+                      icon: Icon(Icons.payment, size: 24, color: Colors.white),
                       label: Text(
                         'PAY NOW',
-                        style: TextStyle(fontWeight: FontWeight.bold),
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 16,
+                          color: Colors.white,
+                        ),
                       ),
                       style: ElevatedButton.styleFrom(
-                        padding: EdgeInsets.symmetric(vertical: 14),
+                        backgroundColor: Colors.transparent,
+                        shadowColor: Colors.transparent,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(16),
+                        ),
                       ),
                       onPressed: () {
                         Navigator.push(
@@ -600,16 +920,52 @@ class ChallanDetailsPageState extends State<ChallanDetailsPage> {
                       },
                     ),
                   ),
+
+                SizedBox(height: 20),
               ],
             ),
           ),
-          if (_isLoading)
-            Positioned.fill(
-              child: Container(
-                color: Colors.black12,
-                child: Center(child: CircularProgressIndicator()),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildDetailRow(
+    String label,
+    dynamic value,
+    IconData icon, {
+    Color? valueColor,
+  }) {
+    final String text = value?.toString() ?? '-';
+    return Padding(
+      padding: EdgeInsets.symmetric(vertical: 8),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(icon, size: 20, color: Colors.grey[600]),
+          SizedBox(width: 12),
+          Expanded(
+            flex: 2,
+            child: Text(
+              label,
+              style: TextStyle(
+                fontWeight: FontWeight.w500,
+                color: Colors.grey[700],
+                fontSize: 14,
               ),
             ),
+          ),
+          Expanded(
+            flex: 3,
+            child: Text(
+              text,
+              style: TextStyle(
+                fontWeight: FontWeight.w600,
+                color: valueColor ?? Colors.grey[800],
+                fontSize: 14,
+              ),
+            ),
+          ),
         ],
       ),
     );
