@@ -55,9 +55,5 @@ flutter:
   uses-material-design: true
 
   assets:
-    - assets/icons/issue_challan.png
-    - assets/icons/view_challan.png
-    - assets/images/clean_city.jpg
-    - assets/images/clean_city.png
-    - assets/icons/report.png
-    - assets/icons/regulation.png
+    - assets/icons/
+    - assets/images/

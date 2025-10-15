@@ -26,13 +26,6 @@ class _DashboardPageState extends State<DashboardPage> {
   bool _isLoading = true;
   String? _error;
 
-  final List<String> bannerImages = [
-    'https://www.brantford.ca/en/living-here/resources/Images/Climate-Action/litter-clean-up.png',
-    'https://img.freepik.com/free-vector/volunteers-trash-out-composition-with-cityscape-illustration-group-flat-human-characters-with-cleaning-utensils_1284-61784.jpg?semt=ais_hybrid&w=740',
-    'https://www.telehouse.com/wp-content/uploads/2017/06/Telehouse-blog-6-1-17.png',
-    'https://img.freepik.com/premium-vector/cleaning-city-service-illustration-cartoon-flat-worker-cleaner-people-uniform-working-with-equipment-clean-city-urban-street_169479-789.jpg',
-  ];
-
   @override
   void initState() {
     super.initState();
@@ -340,42 +333,34 @@ class _DashboardPageState extends State<DashboardPage> {
                     autoPlayInterval: Duration(seconds: 3),
                     autoPlayCurve: Curves.fastOutSlowIn,
                   ),
-                  items: bannerImages.map((imageUrl) {
-                    return Builder(
-                      builder: (BuildContext context) {
-                        return Container(
-                          margin: EdgeInsets.symmetric(vertical: 10),
-                          decoration: BoxDecoration(
-                            borderRadius: BorderRadius.circular(16),
-                            boxShadow: [
-                              BoxShadow(
-                                color: Colors.black.withAlpha(26),
-                                blurRadius: 10,
-                                offset: Offset(0, 4),
-                              ),
-                            ],
-                          ),
-                          child: ClipRRect(
-                            borderRadius: BorderRadius.circular(16),
-                            child: Image.network(
-                              imageUrl,
-                              fit: BoxFit.cover,
-                              width: double.infinity,
-                              loadingBuilder:
-                                  (context, child, loadingProgress) {
-                                    if (loadingProgress == null) return child;
-                                    return Shimmer.fromColors(
-                                      baseColor: Colors.grey[300]!,
-                                      highlightColor: Colors.grey[100]!,
-                                      child: Container(color: Colors.white),
-                                    );
-                                  },
+                  items: [
+                    for (int i = 1; i < 5; i++)
+                      Builder(
+                        builder: (BuildContext context) {
+                          return Container(
+                            margin: EdgeInsets.symmetric(vertical: 10),
+                            decoration: BoxDecoration(
+                              borderRadius: BorderRadius.circular(16),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: Colors.black.withAlpha(26),
+                                  blurRadius: 10,
+                                  offset: Offset(0, 4),
+                                ),
+                              ],
                             ),
-                          ),
-                        );
-                      },
-                    );
-                  }).toList(),
+                            child: ClipRRect(
+                              borderRadius: BorderRadius.circular(16),
+                              child: Image.asset(
+                                'assets/images/banner_$i.jpeg',
+                                fit: BoxFit.cover,
+                                width: double.infinity,
+                              ),
+                            ),
+                          );
+                        },
+                      ),
+                  ],
                 ),
               ),
               Padding(
