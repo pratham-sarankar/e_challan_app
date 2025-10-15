@@ -61,9 +61,9 @@ class ApiService {
       final path = file.path.toLowerCase();
       String mimeMain = 'image';
       String mimeSub = 'jpeg';
-      if (path.endsWith('.png'))
+      if (path.endsWith('.png')) {
         mimeSub = 'png';
-      else if (path.endsWith('.jpg') || path.endsWith('.jpeg'))
+      } else if (path.endsWith('.jpg') || path.endsWith('.jpeg'))
         mimeSub = 'jpeg';
       else if (path.endsWith('.webp'))
         mimeSub = 'webp';
@@ -91,8 +91,9 @@ class ApiService {
       String msg = 'Image upload failed with status ${resp.statusCode}';
       try {
         final decoded = jsonDecode(resp.body);
-        if (decoded is Map && decoded['message'] != null)
+        if (decoded is Map && decoded['message'] != null) {
           msg = decoded['message'];
+        }
       } catch (_) {}
       throw Exception(msg);
     }
@@ -319,8 +320,9 @@ class ApiService {
       String msg = 'Create challan failed with status ${response.statusCode}';
       try {
         final decoded = jsonDecode(response.body);
-        if (decoded is Map && decoded['message'] != null)
+        if (decoded is Map && decoded['message'] != null) {
           msg = decoded['message'];
+        }
       } catch (_) {}
       throw Exception(msg);
     }
@@ -392,7 +394,7 @@ class ApiService {
   /// If [id] is provided this will call GET /challans/<id> and return a list
   /// containing one mapped challan. Otherwise it will call GET /challans and
   /// attempt to map all returned challans.
-  Future<List<Map<String, dynamic>>> getChallans({int? id}) async {
+  Future<List<ChallanResponse>> getChallans({int? id}) async {
     final url = Uri.parse(
       id == null ? '$baseUrl/challans' : '$baseUrl/challans/$id',
     );
@@ -407,24 +409,36 @@ class ApiService {
           decoded['status'] == 'success' &&
           decoded['data'] != null) {
         final data = decoded['data'];
-        final List<Map<String, dynamic>> out = [];
+        final List<ChallanResponse> out = [];
 
-        // Single challan returned under `challan`
-        if (data is Map && data['challan'] != null) {
-          final c = data['challan'] as Map<String, dynamic>;
-          out.add(_mapServerChallanToLocal(c));
-        } else if (data is Map && data['challans'] is List) {
+        // Handle the new API response structure
+        if (data is Map && data['challans'] is List) {
+          // Multiple challans in 'challans' array
           for (final item in (data['challans'] as List)) {
-            if (item is Map<String, dynamic>)
-              out.add(_mapServerChallanToLocal(item));
+            if (item is Map<String, dynamic>) {
+              // Convert relative image URLs to full URLs
+              final challanData = Map<String, dynamic>.from(item);
+              if (challanData['image_urls'] is List) {
+                final imageUrls = (challanData['image_urls'] as List)
+                    .map((url) => _convertToFullImageUrl(url.toString()))
+                    .toList();
+                challanData['image_urls'] = imageUrls;
+              }
+              out.add(ChallanResponse.fromJson(challanData));
+            }
           }
-        } else if (data is List) {
-          for (final item in data) {
-            if (item is Map<String, dynamic>)
-              out.add(_mapServerChallanToLocal(item));
+        } else if (data is Map && data['challan'] != null) {
+          // Single challan returned under 'challan'
+          final challanData = Map<String, dynamic>.from(data['challan']);
+          if (challanData['image_urls'] is List) {
+            final imageUrls = (challanData['image_urls'] as List)
+                .map((url) => _convertToFullImageUrl(url.toString()))
+                .toList();
+            challanData['image_urls'] = imageUrls;
           }
+          out.add(ChallanResponse.fromJson(challanData));
         } else {
-          // Unexpected shape - try to coerce if possible
+          // Unexpected shape - try to handle legacy format
           print(
             '[ApiService] getChallans: unexpected data shape ${data.runtimeType}',
           );
@@ -441,8 +455,9 @@ class ApiService {
       String msg = 'Failed to fetch challans (status ${response.statusCode})';
       try {
         final decoded = jsonDecode(response.body);
-        if (decoded is Map && decoded['message'] != null)
+        if (decoded is Map && decoded['message'] != null) {
           msg = decoded['message'];
+        }
       } catch (_) {}
       throw Exception(msg);
     }
@@ -499,8 +514,9 @@ class ApiService {
           'Failed to fetch challan images (status ${response.statusCode})';
       try {
         final decoded = jsonDecode(response.body);
-        if (decoded is Map && decoded['message'] != null)
+        if (decoded is Map && decoded['message'] != null) {
           msg = decoded['message'];
+        }
       } catch (_) {}
       throw Exception(msg);
     }
@@ -508,9 +524,7 @@ class ApiService {
 
   /// Fetch images for a specific challan id and return objects containing id and url.
   /// This is useful when the client needs the server image id for operations like delete.
-  Future<List<Map<String, dynamic>>> getChallanImageObjects(
-    int challanId,
-  ) async {
+  Future<List<String>> getChallanImageObjects(int challanId) async {
     final url = Uri.parse('$baseUrl/challans/$challanId/images');
     final headers = await getAuthHeaders();
     final response = await http.get(url, headers: headers);
@@ -525,27 +539,9 @@ class ApiService {
         final data = decoded['data'];
         if (data is Map && data['images'] is List) {
           final List images = data['images'] as List;
-
-          String toFullUrl(String? p) {
-            if (p == null) return '';
-            final normalized = p.replaceAll('\\', '/').replaceAll('//', '/');
-            if (normalized.startsWith('/')) return '$baseUrl$normalized';
-            return '$baseUrl/$normalized';
-          }
-
-          return images
-              .where(
-                (e) => e is Map && (e['image_path'] ?? e['image_name']) != null,
-              )
-              .map<Map<String, dynamic>>((e) {
-                final map = e as Map<String, dynamic>;
-                final path =
-                    (map['image_path'] ?? map['image_name'])?.toString() ?? '';
-                final urlStr = toFullUrl(path);
-                final int id = (map['id'] ?? map['image_id'] ?? 0) as int;
-                return {'id': id, 'url': urlStr, 'raw': map};
-              })
-              .toList();
+          return images.map<String>((e) {
+            return "${Constants.apiBaseUrl}/${e['image_path']}";
+          }).toList();
         }
         return [];
       } else {
@@ -559,8 +555,9 @@ class ApiService {
           'Failed to fetch challan images (status ${response.statusCode})';
       try {
         final decoded = jsonDecode(response.body);
-        if (decoded is Map && decoded['message'] != null)
+        if (decoded is Map && decoded['message'] != null) {
           msg = decoded['message'];
+        }
       } catch (_) {}
       throw Exception(msg);
     }
@@ -595,8 +592,9 @@ class ApiService {
           'Failed to fetch transactions (status ${response.statusCode})';
       try {
         final decoded = jsonDecode(response.body);
-        if (decoded is Map && decoded['message'] != null)
+        if (decoded is Map && decoded['message'] != null) {
           msg = decoded['message'];
+        }
       } catch (_) {}
       throw Exception(msg);
     }
@@ -618,8 +616,9 @@ class ApiService {
       String msg = 'Failed to delete image (status ${response.statusCode})';
       try {
         final decoded = jsonDecode(response.body);
-        if (decoded is Map && decoded['message'] != null)
+        if (decoded is Map && decoded['message'] != null) {
           msg = decoded['message'];
+        }
       } catch (_) {}
       throw Exception(msg);
     }
@@ -640,8 +639,9 @@ class ApiService {
       String msg = 'Failed to delete challan (status ${response.statusCode})';
       try {
         final decoded = jsonDecode(response.body);
-        if (decoded is Map && decoded['message'] != null)
+        if (decoded is Map && decoded['message'] != null) {
           msg = decoded['message'];
+        }
       } catch (_) {}
       throw Exception(msg);
     }
@@ -691,54 +691,25 @@ class ApiService {
           'Create transaction failed with status ${response.statusCode}';
       try {
         final decoded = jsonDecode(response.body);
-        if (decoded is Map && decoded['message'] != null)
+        if (decoded is Map && decoded['message'] != null) {
           msg = decoded['message'];
+        }
       } catch (_) {}
       throw Exception(msg);
     }
   }
 
-  /// Map a server challan JSON object to the app's local challan Map shape
-  Map<String, dynamic> _mapServerChallanToLocal(Map<String, dynamic> src) {
-    // Helper to build full URL for image paths that may be relative
-    String toFullUrl(String? u) {
-      if (u == null) return '';
-      if (u.startsWith('http://') || u.startsWith('https://')) return u;
-      if (u.startsWith('/')) return '$baseUrl$u';
-      return '$baseUrl/$u';
+  /// Convert relative image URL to full URL
+  String _convertToFullImageUrl(String imageUrl) {
+    if (imageUrl.isEmpty) return '';
+    if (imageUrl.startsWith('http://') || imageUrl.startsWith('https://')) {
+      return imageUrl;
     }
-
-    final imageUrlsRaw =
-        (src['image_urls'] as List?)
-            ?.map((e) => e?.toString() ?? '')
-            .where((s) => s.isNotEmpty)
-            .toList() ??
-        [];
-    final imageUrls = imageUrlsRaw.map((s) => toFullUrl(s)).toList();
-
-    return {
-      'id': src['id'] ?? 0,
-      // server may expose a separate challan_id; if present include it
-      'challan_id': src['challan_id'] ?? src['id'] ?? 0,
-      'name': src['full_name'] ?? src['challan_name'] ?? 'Unknown',
-      'mobile': src['contact_number'] ?? '',
-      'latitude': (src['latitude'] is num)
-          ? (src['latitude'] as num).toDouble()
-          : 0.0,
-      'longitude': (src['longitude'] is num)
-          ? (src['longitude'] as num).toDouble()
-          : 0.0,
-      'rule': src['challan_name'] ?? src['rule'] ?? '',
-      // keep amount as string to be compatible with existing usages
-      'amount':
-          src['fine_amount']?.toString() ?? (src['amount']?.toString() ?? '0'),
-      'notes': src['description'] ?? src['notes'] ?? '-',
-      'image_urls': imageUrls,
-      'image_count': src['image_count'] ?? imageUrls.length,
-      'status': src['status'] ?? 'Unpaid',
-      'created_at': src['created_at'] ?? src['createdAt'] ?? '',
-      // Keep a list of local File objects empty for server-fetched challans
-      'images': <dynamic>[],
-    };
+    // Handle relative URLs that start with /
+    if (imageUrl.startsWith('/')) {
+      return '$baseUrl$imageUrl';
+    }
+    // Handle relative URLs without leading /
+    return '$baseUrl/$imageUrl';
   }
 }

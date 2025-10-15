@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:animate_do/animate_do.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'package:municipal_e_challan/models/challan_response.dart';
 import 'package:municipal_e_challan/services/api_services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:shimmer/shimmer.dart';
@@ -19,7 +20,7 @@ class ViewChallanPage extends StatefulWidget {
 class _ViewChallanPageState extends State<ViewChallanPage> {
   DateTime? _fromDate;
   DateTime? _toDate;
-  List<Map<String, dynamic>> _filteredChallans = [];
+  List<ChallanResponse> _filteredChallans = [];
   bool _isLoading = true;
 
   // Controls whether the small 'swipe to delete' hint is shown
@@ -79,7 +80,7 @@ class _ViewChallanPageState extends State<ViewChallanPage> {
           59,
         );
         results = results.where((c) {
-          final createdRaw = c['created_at'] ?? c['createdAt'] ?? '';
+          final createdRaw = c.createdAt;
           try {
             final dt = DateTime.parse(createdRaw.toString());
             return !dt.isBefore(from) && !dt.isAfter(to);
@@ -315,9 +316,7 @@ class _ViewChallanPageState extends State<ViewChallanPage> {
                       separatorBuilder: (_, index) => SizedBox(height: 12),
                       itemBuilder: (_, index) {
                         final challan = _filteredChallans[index];
-                        final keyVal = ValueKey(
-                          challan['challan_id'] ?? challan['id'] ?? index,
-                        );
+                        final keyVal = ValueKey(challan.id);
 
                         return Dismissible(
                           key: keyVal,
@@ -390,9 +389,7 @@ class _ViewChallanPageState extends State<ViewChallanPage> {
                             final removed = _filteredChallans.removeAt(index);
                             setState(() {});
 
-                            final int fetchId =
-                                (removed['challan_id'] ?? removed['id'] ?? 0)
-                                    as int;
+                            final int fetchId = removed.id;
 
                             // Show progress while deleting
                             showDialog(
@@ -496,7 +493,7 @@ class _ViewChallanPageState extends State<ViewChallanPage> {
     );
   }
 
-  Widget _buildChallanCard(Map<String, dynamic> challan, int index) {
+  Widget _buildChallanCard(ChallanResponse challan, int index) {
     // Status removed from challan UI because API does not return a `status` field.
     // Use a neutral color for the card.
     final statusColor = Colors.orange;
@@ -533,14 +530,14 @@ class _ViewChallanPageState extends State<ViewChallanPage> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      challan["name"],
+                      challan.name,
                       style: Theme.of(context).textTheme.titleMedium?.copyWith(
                         fontWeight: FontWeight.bold,
                       ),
                     ),
                     SizedBox(height: 4),
                     Text(
-                      "Rule: ${challan['rule']}",
+                      "Rule: ${challan.rule}",
                       style: Theme.of(
                         context,
                       ).textTheme.bodyMedium?.copyWith(color: Colors.grey[600]),
@@ -554,7 +551,7 @@ class _ViewChallanPageState extends State<ViewChallanPage> {
                 crossAxisAlignment: CrossAxisAlignment.end,
                 children: [
                   Text(
-                    "₹${challan['amount']}",
+                    "₹${challan.amount}",
                     style: TextStyle(
                       fontWeight: FontWeight.bold,
                       fontSize: 16,
@@ -572,15 +569,13 @@ class _ViewChallanPageState extends State<ViewChallanPage> {
 
   Future<void> _showChallanDetails(
     BuildContext context,
-    Map<String, dynamic> challan,
+    ChallanResponse challan,
     int index,
   ) async {
     // Navigate to the new full-screen ChallanDetailsPage instead of showing a dialog
     Navigator.push(
       context,
-      MaterialPageRoute(
-        builder: (_) => ChallanDetailsPage(challan: challan, index: index),
-      ),
+      MaterialPageRoute(builder: (_) => ChallanDetailsPage(challan: challan)),
     );
   }
 

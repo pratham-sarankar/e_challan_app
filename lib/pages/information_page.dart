@@ -7,7 +7,7 @@ import '../models/challan_type.dart';
 import '../services/api_services.dart';
 
 class InformationPage extends StatefulWidget {
-  InformationPage({super.key});
+  const InformationPage({super.key});
 
   @override
   State<InformationPage> createState() => _InformationPageState();
@@ -105,8 +105,9 @@ class _InformationPageState extends State<InformationPage> {
     try {
       final types = await _apiService.getChallanTypes();
       print('[InformationPage] loaded challan types count=${types.length}');
-      for (final t in types)
+      for (final t in types) {
         print('[InformationPage] type=${t.typeName} fine=${t.fineAmount}');
+      }
       if (mounted) {
         setState(() => _challanTypes = types);
       }
@@ -174,8 +175,9 @@ class _InformationPageState extends State<InformationPage> {
             Expanded(
               child: Builder(
                 builder: (context) {
-                  if (_isLoadingTypes)
+                  if (_isLoadingTypes) {
                     return Center(child: CircularProgressIndicator());
+                  }
                   if (_loadError != null) {
                     return Center(
                       child: Column(
@@ -197,8 +199,9 @@ class _InformationPageState extends State<InformationPage> {
                     );
                   }
 
-                  if (_challanTypes.isEmpty)
+                  if (_challanTypes.isEmpty) {
                     return Center(child: Text('No challan types available'));
+                  }
 
                   return ListView.builder(
                     itemCount: _challanTypes.length,

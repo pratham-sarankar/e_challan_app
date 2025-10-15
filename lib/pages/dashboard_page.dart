@@ -14,7 +14,7 @@ import 'login_page.dart';
 import 'view_challan_page.dart';
 
 class DashboardPage extends StatefulWidget {
-  DashboardPage({super.key});
+  const DashboardPage({super.key});
 
   @override
   State<DashboardPage> createState() => _DashboardPageState();

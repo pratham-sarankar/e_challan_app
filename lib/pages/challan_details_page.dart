@@ -2,26 +2,21 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'package:municipal_e_challan/models/challan_response.dart';
 import 'package:municipal_e_challan/pages/payment_page.dart';
 import 'package:municipal_e_challan/services/api_services.dart';
 
 class ChallanDetailsPage extends StatefulWidget {
-  final Map<String, dynamic> challan;
-  final int index;
+  final ChallanResponse challan;
 
-  const ChallanDetailsPage({
-    super.key,
-    required this.challan,
-    required this.index,
-  });
+  const ChallanDetailsPage({super.key, required this.challan});
 
   @override
-  _ChallanDetailsPageState createState() => _ChallanDetailsPageState();
+  ChallanDetailsPageState createState() => ChallanDetailsPageState();
 }
 
-class _ChallanDetailsPageState extends State<ChallanDetailsPage> {
+class ChallanDetailsPageState extends State<ChallanDetailsPage> {
   final ApiService _apiService = ApiService();
-  List<Map<String, dynamic>> _serverObjs = [];
   bool _isLoading = true;
 
   // Transactions state
@@ -42,15 +37,12 @@ class _ChallanDetailsPageState extends State<ChallanDetailsPage> {
   Future<void> _fetchServerImages() async {
     setState(() => _isLoading = true);
     try {
-      final int fetchId =
-          (widget.challan['challan_id'] ?? widget.challan['id'] ?? 0) as int;
+      final int fetchId = widget.challan.challanId;
       if (fetchId > 0) {
-        final objs = await _apiService.getChallanImageObjects(fetchId);
-        // getChallanImageObjects returns a List<Map<String, dynamic>> so no runtime type check needed
-        _serverObjs = objs
-            .where((m) => (m['url'] as String?)?.isNotEmpty == true)
-            .map<Map<String, dynamic>>((m) => Map<String, dynamic>.from(m))
-            .toList();
+        final result = await _apiService.getChallanImageObjects(fetchId);
+        setState(() {
+          widget.challan.imageUrls = result;
+        });
       }
     } catch (e) {
       if (mounted) {
@@ -71,8 +63,7 @@ class _ChallanDetailsPageState extends State<ChallanDetailsPage> {
       _transError = null;
     });
     try {
-      final int fetchId =
-          (widget.challan['challan_id'] ?? widget.challan['id'] ?? 0) as int;
+      final int fetchId = widget.challan.challanId;
       if (fetchId > 0) {
         final data = await _apiService.getChallanTransactions(fetchId);
         // Safely extract expected fields
@@ -118,63 +109,6 @@ class _ChallanDetailsPageState extends State<ChallanDetailsPage> {
       });
     } finally {
       if (mounted) setState(() => _isTransLoading = false);
-    }
-  }
-
-  Future<void> _deleteImage(int imgId, String url) async {
-    final confirm = await showDialog<bool>(
-      context: context,
-      builder: (c) => AlertDialog(
-        title: Text('Delete image?'),
-        content: Text(
-          'This will permanently delete the selected evidence image.',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(c, false),
-            child: Text('CANCEL'),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(c, true),
-            child: Text('DELETE', style: TextStyle(color: Colors.red)),
-          ),
-        ],
-      ),
-    );
-
-    if (confirm != true) return;
-
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (_) => Center(child: CircularProgressIndicator()),
-    );
-
-    try {
-      final int fetchId =
-          (widget.challan['challan_id'] ?? widget.challan['id'] ?? 0) as int;
-      await _apiService.deleteChallanImage(fetchId, imgId);
-
-      // Update local lists/state
-      setState(() {
-        _serverObjs.removeWhere((x) => (x['id'] == imgId) || (x['url'] == url));
-        if (widget.challan['image_urls'] is List) {
-          final List l = widget.challan['image_urls'] as List;
-          l.removeWhere((e) => e?.toString() == url);
-          widget.challan['image_urls'] = l;
-        }
-      });
-
-      Navigator.pop(context); // remove progress
-
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('Image deleted')));
-    } catch (e) {
-      Navigator.pop(context); // remove progress
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Failed to delete image: ${e.toString()}')),
-      );
     }
   }
 
@@ -287,13 +221,18 @@ class _ChallanDetailsPageState extends State<ChallanDetailsPage> {
                         statusColor = Colors.grey;
                         statusLabel = entry.key.toString();
                     }
-                    
+
                     return Container(
-                      padding: EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                      padding: EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 6,
+                      ),
                       decoration: BoxDecoration(
-                        color: statusColor.withOpacity(0.1),
+                        color: statusColor.withValues(alpha: 0.1),
                         borderRadius: BorderRadius.circular(16),
-                        border: Border.all(color: statusColor.withOpacity(0.3)),
+                        border: Border.all(
+                          color: statusColor.withValues(alpha: 0.3),
+                        ),
                       ),
                       child: Row(
                         mainAxisSize: MainAxisSize.min,
@@ -413,9 +352,11 @@ class _ChallanDetailsPageState extends State<ChallanDetailsPage> {
                     Container(
                       padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                       decoration: BoxDecoration(
-                        color: statusColor.withOpacity(0.1),
+                        color: statusColor.withValues(alpha: 0.1),
                         borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: statusColor.withOpacity(0.3)),
+                        border: Border.all(
+                          color: statusColor.withValues(alpha: 0.3),
+                        ),
                       ),
                       child: Text(
                         statusText,
@@ -548,11 +489,7 @@ class _ChallanDetailsPageState extends State<ChallanDetailsPage> {
 
   @override
   Widget build(BuildContext context) {
-    final challan = widget.challan;
-    final hasEvidence =
-        _serverObjs.isNotEmpty ||
-        ((challan['images'] as List?)?.isNotEmpty ?? false) ||
-        ((challan['image_urls'] as List?)?.isNotEmpty ?? false);
+    final hasEvidence = widget.challan.imageUrls.isNotEmpty;
 
     return Scaffold(
       appBar: AppBar(
@@ -578,29 +515,22 @@ class _ChallanDetailsPageState extends State<ChallanDetailsPage> {
                       1: FlexColumnWidth(2.5),
                     },
                     children: [
-                      _buildTableRow('Challan No.', '#${widget.index + 1}'),
                       _buildTableRow(
-                        'Date',
-                        (() {
-                          final createdRaw =
-                              challan['created_at'] ??
-                              challan['createdAt'] ??
-                              '';
-                          try {
-                            final dt = DateTime.parse(createdRaw.toString());
-                            return DateFormat('dd/MM/yyyy').format(dt);
-                          } catch (_) {
-                            return DateFormat(
-                              'dd/MM/yyyy',
-                            ).format(DateTime.now());
-                          }
-                        })(),
+                        'Challan ID:',
+                        '#${widget.challan.challanId}',
                       ),
-                      _buildTableRow('Name', challan['name']),
-                      _buildTableRow('Mobile', challan['mobile']),
-                      _buildTableRow('Rule Violated', challan['rule']),
-                      _buildTableRow('Fine Amount', '₹${challan['amount']}'),
-                      _buildTableRow('Notes', challan['notes'] ?? '-'),
+                      _buildTableRow('Date', widget.challan.createdAt),
+                      _buildTableRow('Name', widget.challan.fullName),
+                      _buildTableRow('Mobile', widget.challan.contactNumber),
+                      // TODO: Fetch challan type and create a global provider so we can access it from anywhere
+                      // Right now we have only the challanTypeId
+                      // _buildTableRow('Rule Violated', widget.challan.challanTypeId),
+                      _buildTableRow(
+                        'Fine Amount',
+                        '₹${widget.challan.fineAmount}',
+                      ),
+                      // TODO: check if the API returns notes or description, if yes, display it here.
+                      // _buildTableRow('Notes', widget.challan.notes ?? '-'),
                     ],
                   ),
                 ),
@@ -615,64 +545,7 @@ class _ChallanDetailsPageState extends State<ChallanDetailsPage> {
                     spacing: 8,
                     runSpacing: 8,
                     children: [
-                      ...(_serverObjs.isNotEmpty
-                              ? _serverObjs
-                              : (challan['image_urls'] as List? ?? [])
-                                    .map((u) => {'id': 0, 'url': u})
-                                    .toList())
-                          .map<Widget>((m) {
-                            final String url = (m['url'] as String?) ?? '';
-                            final int imgId = (m['id'] is int)
-                                ? m['id'] as int
-                                : int.tryParse('${m['id']}') ?? 0;
-
-                            return Stack(
-                              children: [
-                                ClipRRect(
-                                  borderRadius: BorderRadius.circular(8),
-                                  child: Image.network(
-                                    url,
-                                    width: 100,
-                                    height: 100,
-                                    fit: BoxFit.cover,
-                                    errorBuilder: (ctx2, err, st) => Container(
-                                      width: 100,
-                                      height: 100,
-                                      color: Colors.grey[200],
-                                      child: Icon(
-                                        Icons.broken_image,
-                                        color: Colors.grey,
-                                      ),
-                                    ),
-                                  ),
-                                ),
-                                if (imgId > 0)
-                                  Positioned(
-                                    top: 4,
-                                    right: 4,
-                                    child: Container(
-                                      decoration: BoxDecoration(
-                                        color: Colors.black54,
-                                        borderRadius: BorderRadius.circular(20),
-                                      ),
-                                      child: IconButton(
-                                        padding: EdgeInsets.all(4),
-                                        constraints: BoxConstraints(),
-                                        icon: Icon(
-                                          Icons.delete,
-                                          size: 18,
-                                          color: Colors.white,
-                                        ),
-                                        onPressed: () =>
-                                            _deleteImage(imgId, url),
-                                      ),
-                                    ),
-                                  ),
-                              ],
-                            );
-                          }),
-
-                      ...((challan['images'] as List?) ?? []).map<Widget>(
+                      ...widget.challan.imageUrls.map<Widget>(
                         (img) => ClipRRect(
                           borderRadius: BorderRadius.circular(8),
                           child: SizedBox(
@@ -724,10 +597,7 @@ class _ChallanDetailsPageState extends State<ChallanDetailsPage> {
                       Navigator.push(
                         context,
                         MaterialPageRoute(
-                          builder: (_) => PaymentPage(
-                            index: widget.index,
-                            challan: widget.challan,
-                          ),
+                          builder: (_) => PaymentPage(challan: widget.challan),
                         ),
                       );
                     },

@@ -112,7 +112,7 @@ class WorkReportPage extends StatelessWidget {
           borderRadius: BorderRadius.circular(12),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withOpacity(0.05),
+              color: Colors.black.withValues(alpha: 0.05),
               blurRadius: 10,
               spreadRadius: 2,
             ),
@@ -126,7 +126,7 @@ class WorkReportPage extends StatelessWidget {
                 Container(
                   padding: EdgeInsets.all(6),
                   decoration: BoxDecoration(
-                    color: color.withOpacity(0.2),
+                    color: color.withValues(alpha: 0.2),
                     shape: BoxShape.circle,
                   ),
                   child: Icon(icon, size: 20, color: color),
@@ -191,8 +191,8 @@ class WorkReportPage extends StatelessWidget {
         height: 40,
         decoration: BoxDecoration(
           color: item['action'].toString().contains('received')
-              ? Colors.green.withOpacity(0.2)
-              : Colors.blue.withOpacity(0.2),
+              ? Colors.green.withValues(alpha: 0.2)
+              : Colors.blue.withValues(alpha: 0.2),
           shape: BoxShape.circle,
         ),
         child: Icon(

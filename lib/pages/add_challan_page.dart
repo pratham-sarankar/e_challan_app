@@ -45,8 +45,9 @@ class _AddChallanPageState extends State<AddChallanPage> {
     try {
       final types = await _api_service.getChallanTypes();
       // Debug: log loaded types
-      for (final t in types)
+      for (final t in types) {
         print('[AddChallanPage] type=${t.typeName} fine=${t.fineAmount}');
+      }
       setState(() {
         _challanTypes = types;
       });
@@ -72,12 +73,13 @@ class _AddChallanPageState extends State<AddChallanPage> {
       }
     } catch (e) {
       // show a small UI message so developers/testers know fetching failed
-      if (mounted)
+      if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('Failed to load challan types: ${e.toString()}'),
           ),
         );
+      }
     } finally {
       if (mounted) setState(() => _isLoadingTypes = false);
     }
@@ -177,7 +179,7 @@ class _AddChallanPageState extends State<AddChallanPage> {
 
     setState(() => _isSubmitting = true);
     try {
-      final ChallanResponse resp = await _api_service.createChallan(
+      final ChallanResponse newChallan = await _api_service.createChallan(
         fullName: fullName,
         contactNumber: contactNumber,
         challanTypeId: challanTypeId,
@@ -189,34 +191,17 @@ class _AddChallanPageState extends State<AddChallanPage> {
         longitude: longitude,
       );
 
-      //TODO: remove this newChallan variable
-      // Add to local dashboard list using server response
-      final newChallan = {
-        'id': resp.id,
-        'challan_id': resp.challanId,
-        'name': fullName,
-        'mobile': contactNumber,
-        'latitude': latitude,
-        'longitude': longitude,
-        'rule': challanName,
-        'amount': resp.fineAmount.toString(),
-        'notes': description,
-        'image_urls': resp.imageUrls,
-        'image_count': resp.imageCount,
-        'status': 'Unpaid',
-        'created_at': resp.createdAt,
-      };
-
       // If user added images locally, upload them to the server for this challan
       if (images.isNotEmpty) {
         try {
           final uploadData = await _api_service.uploadChallanImages(
-            resp.challanId,
+            newChallan.challanId,
             images,
           );
+
           // uploadData contains uploaded_files and total_uploaded per API sample
-          newChallan['uploaded_files'] = uploadData['uploaded_files'] ?? [];
-          newChallan['total_uploaded'] =
+          newChallan.imageUrls = uploadData['uploaded_files'] ?? [];
+          newChallan.imageCount =
               uploadData['total_uploaded'] ??
               (uploadData['uploaded_files'] as List?)?.length ??
               0;
@@ -480,7 +465,7 @@ class _AddChallanPageState extends State<AddChallanPage> {
                           print(
                             '[AddChallanPage] selected type=${value.typeName} fine=${value.fineAmount}',
                           );
-                          if (mounted)
+                          if (mounted) {
                             ScaffoldMessenger.of(context).showSnackBar(
                               SnackBar(
                                 content: Text(
@@ -489,6 +474,7 @@ class _AddChallanPageState extends State<AddChallanPage> {
                                 duration: Duration(milliseconds: 900),
                               ),
                             );
+                          }
                         } else {
                           amountController.clear();
                         }
@@ -561,7 +547,7 @@ class _AddChallanPageState extends State<AddChallanPage> {
                       ),
                     ),
                     SizedBox(height: 12),
-                    Container(
+                    SizedBox(
                       height: 120,
                       child: ListView.builder(
                         scrollDirection: Axis.horizontal,

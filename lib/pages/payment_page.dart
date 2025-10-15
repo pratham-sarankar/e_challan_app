@@ -1,86 +1,26 @@
-import 'package:barcode_widget/barcode_widget.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'package:municipal_e_challan/models/challan_response.dart';
 import 'package:municipal_e_challan/models/payment_models.dart';
 import 'package:municipal_e_challan/services/api_services.dart';
 import 'package:vizpay_flutter/vizpay_flutter.dart';
 
-/// Payment Page with BLoC integration for ICICI POS payments
-/// Provides multiple payment options: Card (POS), UPI, and Cash
-class PaymentPage extends StatelessWidget {
-  // index may be null if a full challan map is provided directly.
-  final int? index;
-
-  // Optional challan map - prefer this when provided to avoid indexing into the global list.
-  final Map<String, dynamic>? challan;
-
-  const PaymentPage({super.key, this.index, this.challan});
-
-  @override
-  Widget build(BuildContext context) {
-    // Resolve challan map safely. Use provided challan data or create empty map if none provided.
-    Map<String, dynamic> resolvedChallan = {};
-    if (challan != null) {
-      resolvedChallan = Map<String, dynamic>.from(challan!);
-    } else {
-      // If no challan data provided, we can't proceed with payment
-      resolvedChallan = <String, dynamic>{};
-    }
-
-    final amount = resolvedChallan['amount']?.toString() ?? '0';
-    // Use a raw challan id internally (prefer explicit id field if present)
-    final rawChallanId =
-        (resolvedChallan['id']?.toString() ??
-        resolvedChallan['challan_id']?.toString() ??
-        '0');
-    // Display-friendly challan id for UI
-    final challanId = 'CHALLAN_$rawChallanId';
-    final violatorName = resolvedChallan['name'] ?? '';
-    final violatorMobile = resolvedChallan['mobile'] ?? '';
-
-    // Create PaymentPageView (BLoC removed - using PaymentService directly)
-    return PaymentPageView(
-      challan: resolvedChallan,
-      amount: amount,
-      challanId: challanId,
-      rawChallanId: rawChallanId,
-      violatorName: violatorName,
-      violatorMobile: violatorMobile,
-    );
-  }
-}
-
 /// Payment Page View Widget - handles UI rendering
-class PaymentPageView extends StatefulWidget {
-  final Map<String, dynamic> challan;
-  final String amount;
-  final String challanId; // display id
-  final String rawChallanId; // actual challan id to use as bill number
-  final String violatorName;
-  final String violatorMobile;
+class PaymentPage extends StatefulWidget {
+  final ChallanResponse challan;
 
-  const PaymentPageView({
-    super.key,
-    required this.challan,
-    required this.amount,
-    required this.challanId,
-    required this.rawChallanId,
-    required this.violatorName,
-    required this.violatorMobile,
-  });
+  const PaymentPage({super.key, required this.challan});
 
   @override
-  State<PaymentPageView> createState() => _PaymentPageViewState();
+  State<PaymentPage> createState() => _PaymentPageState();
 }
 
-class _PaymentPageViewState extends State<PaymentPageView> {
+class _PaymentPageState extends State<PaymentPage> {
   bool _isProcessing = false;
   String _processingMessage = '';
   PaymentTransaction? _transaction;
   String? _errorMessage;
   bool _posNotInstalled = false;
-  // Focus on card payment by default. Other methods can be enabled in config if needed.
-  List<String> _availablePaymentMethods = ['CARD'];
 
   final ApiService _apiService = ApiService();
 
@@ -164,10 +104,14 @@ class _PaymentPageViewState extends State<PaymentPageView> {
               ],
             ),
             const SizedBox(height: 16),
-            _buildInfoRow("Challan ID", widget.challanId),
-            _buildInfoRow("Violator Name", widget.violatorName),
-            _buildInfoRow("Mobile", widget.violatorMobile),
-            _buildInfoRow("Rule Violated", widget.challan['rule'] ?? ''),
+            _buildInfoRow("Challan ID", widget.challan.challanId.toString()),
+            _buildInfoRow("Violator Name", widget.challan.fullName),
+            _buildInfoRow("Mobile", widget.challan.contactNumber),
+            // TODO: After creating global challan types provider, update this with the rule name instead of the ID.
+            _buildInfoRow(
+              "Rule Violated",
+              widget.challan.challanTypeId.toString(),
+            ),
           ],
         ),
       ),
@@ -176,15 +120,8 @@ class _PaymentPageViewState extends State<PaymentPageView> {
 
   /// Build payment amount card
   Widget _buildPaymentAmountCard() {
-    // Format the amount for better readability
-    String formattedAmount = widget.amount;
-    try {
-      double amount = double.parse(widget.amount);
-      final formatter = NumberFormat('#,##,###');
-      formattedAmount = formatter.format(amount);
-    } catch (e) {
-      // Keep original amount if parsing fails
-    }
+    final amount = widget.challan.fineAmount;
+    final formattedAmount = NumberFormat('#,##,###').format(amount);
 
     return SizedBox(
       width: double.infinity,
@@ -269,78 +206,39 @@ class _PaymentPageViewState extends State<PaymentPageView> {
             const SizedBox(height: 20),
 
             // Card Payment Option
-            if (_availablePaymentMethods.contains('CARD'))
-              _buildPaymentMethodButton(
-                context: context,
-                icon: Icons.credit_card,
-                title: "Card Payment",
-                subtitle: "Pay using debit/credit card via ICICI POS",
-                color: Colors.blue,
-                onTap: () => _startVizpaySale(context),
-              ),
+            _buildPaymentMethodButton(
+              context: context,
+              icon: Icons.credit_card,
+              title: "Card Payment",
+              subtitle: "Pay using debit/credit card via ICICI POS",
+              color: Colors.blue,
+              onTap: () => _startVizpaySale(context),
+            ),
 
-            if (_availablePaymentMethods.contains('CARD'))
-              const SizedBox(height: 12),
+            const SizedBox(height: 12),
             // QR Payment Option
-            if (_availablePaymentMethods.contains('UPI'))
-              _buildPaymentMethodButton(
-                context: context,
-                icon: Icons.qr_code,
-                title: "UPI Payment",
-                subtitle: "Pay using QR code scanning",
-                color: Colors.teal,
-                onTap: () => _processUpiPayment(context),
-              ),
+            _buildPaymentMethodButton(
+              context: context,
+              icon: Icons.qr_code,
+              title: "UPI Payment",
+              subtitle: "Pay using QR code scanning",
+              color: Colors.teal,
+              onTap: () => _processUpiPayment(context),
+            ),
 
             const SizedBox(height: 12),
 
             // Cash Payment Option
-            if (_availablePaymentMethods.contains('CASH'))
-              _buildPaymentMethodButton(
-                context: context,
-                icon: Icons.money,
-                title: "Cash Payment",
-                subtitle: "Pay in cash and receive receipt",
-                color: Colors.green,
-                onTap: () => _processCashPayment(context),
-              ),
-
-            if (_availablePaymentMethods.contains('CASH'))
-              const SizedBox(height: 12),
-
-            /*    // BQR Payment Option
             _buildPaymentMethodButton(
               context: context,
-              icon: Icons.qr_code_scanner,
-              title: "BQR Payment",
-              subtitle: "Pay using Bharat QR code",
-              color: Colors.orange,
-              onTap: () => _processBqrPayment(context),
-            );
+              icon: Icons.money,
+              title: "Cash Payment",
+              subtitle: "Pay in cash and receive receipt",
+              color: Colors.green,
+              onTap: () => _processCashPayment(context),
+            ),
 
-            const SizedBox(height: 12),*/
-
-            /*          // Cash at POS Option
-            _buildPaymentMethodButton(
-              context: context,
-              icon: Icons.point_of_sale,
-              title: "Cash at POS",
-              subtitle: "Pay cash at POS terminal",
-              color: Colors.brown,
-              onTap: () => _processCashAtPosPayment(context),
-            );*/
-
-            /*  const SizedBox(height: 12),
-
-            // Pre-Auth Option
-            _buildPaymentMethodButton(
-              context: context,
-              icon: Icons.lock_clock,
-              title: "Pre-Auth Payment",
-              subtitle: "Authorize payment before completion",
-              color: Colors.purple,
-              onTap: () => _processPreAuthPayment(context),
-            ),*/
+            const SizedBox(height: 12),
           ],
         ),
       ),
@@ -395,82 +293,6 @@ class _PaymentPageViewState extends State<PaymentPageView> {
               ),
             ),
             Icon(Icons.arrow_forward_ios, color: color, size: 16),
-          ],
-        ),
-      ),
-    );
-  }
-
-  /// Build UPI payment card with QR code
-  Widget _buildUpiPaymentCard(BuildContext context, String qrData) {
-    return Card(
-      elevation: 4,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-      child: Padding(
-        padding: const EdgeInsets.all(20),
-        child: Column(
-          children: [
-            Text(
-              "UPI Payment",
-              style: Theme.of(
-                context,
-              ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
-            ),
-            const SizedBox(height: 20),
-            Text(
-              "Scan QR code using any UPI app",
-              style: TextStyle(color: Colors.grey[600]),
-            ),
-            const SizedBox(height: 20),
-            Container(
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: Colors.grey[300]!),
-              ),
-              child: BarcodeWidget(
-                barcode: Barcode.qrCode(
-                  errorCorrectLevel: BarcodeQRCorrectionLevel.high,
-                ),
-                data: qrData,
-                width: 200,
-                height: 200,
-                color: Colors.indigo,
-              ),
-            ),
-            const SizedBox(height: 16),
-            Text(
-              "Municipal Corporation",
-              style: TextStyle(fontSize: 14, color: Colors.grey[600]),
-            ),
-            const SizedBox(height: 20),
-            Row(
-              children: [
-                Expanded(
-                  child: OutlinedButton(
-                    onPressed: () {
-                      // Cancel UPI flow and reset
-                      setState(() {
-                        _isProcessing = false;
-                        _processingMessage = '';
-                        _errorMessage = null;
-                      });
-                    },
-                    child: const Text("Cancel"),
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: ElevatedButton(
-                    onPressed: () => _processUpiPayment(context),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.green,
-                    ),
-                    child: const Text("Payment Done"),
-                  ),
-                ),
-              ],
-            ),
           ],
         ),
       ),
@@ -633,40 +455,6 @@ class _PaymentPageViewState extends State<PaymentPageView> {
     );
   }
 
-  /// Build loading card
-  Widget _buildLoadingCard() {
-    return Card(
-      elevation: 4,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-      child: const Padding(
-        padding: EdgeInsets.all(24),
-        child: Center(child: CircularProgressIndicator()),
-      ),
-    );
-  }
-
-  /// Build cash processing card
-  Widget _buildCashProcessingCard() {
-    return Card(
-      elevation: 4,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-      child: Padding(
-        padding: const EdgeInsets.all(24),
-        child: Column(
-          children: [
-            const CircularProgressIndicator(),
-            const SizedBox(height: 16),
-            Text(
-              "Processing Cash Payment...",
-              style: const TextStyle(fontSize: 16),
-              textAlign: TextAlign.center,
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
   /// Build help information
   Widget _buildHelpInfo() {
     return Container(
@@ -727,13 +515,14 @@ class _PaymentPageViewState extends State<PaymentPageView> {
       });
 
       // Parse amount to ensure proper format
-      final double amountValue = double.parse(widget.amount);
+      final double amountValue = widget.challan.fineAmount;
       final String formattedAmount = amountValue.toStringAsFixed(2);
 
       // Use transaction ID as bill number and challan ID as source ID as requested
       final transactionId = 'TXN_${DateTime.now().millisecondsSinceEpoch}';
       final billNumber = transactionId; // Transaction ID as bill number
-      final sourceId = widget.rawChallanId; // Challan ID as source ID
+      final sourceId = widget.challan.challanId
+          .toString(); // Challan ID as source ID
 
       setState(() {
         _processingMessage = 'Processing card payment...';
@@ -762,7 +551,7 @@ class _PaymentPageViewState extends State<PaymentPageView> {
 
           try {
             final transactionData = await _apiService.createTransaction(
-              challanId: int.parse(widget.rawChallanId),
+              challanId: widget.challan.challanId,
               orderStatus: 'paid',
               orderId: transactionId,
               paymentMethod: 'CARD',
@@ -774,7 +563,7 @@ class _PaymentPageViewState extends State<PaymentPageView> {
             // Create successful payment transaction
             final transaction = PaymentTransaction(
               transactionId: transactionId,
-              challanId: widget.rawChallanId,
+              challanId: widget.challan.challanId.toString(),
               amount: formattedAmount,
               paymentMethod: 'CARD',
               status: 'SUCCESS',
@@ -827,7 +616,7 @@ class _PaymentPageViewState extends State<PaymentPageView> {
           // Try to create a failed transaction record
           try {
             await _apiService.createTransaction(
-              challanId: int.parse(widget.rawChallanId),
+              challanId: widget.challan.challanId,
               orderStatus: 'failed',
               orderId: transactionId,
               paymentMethod: 'CARD',
@@ -858,11 +647,11 @@ class _PaymentPageViewState extends State<PaymentPageView> {
       try {
         final transactionId = 'TXN_${DateTime.now().millisecondsSinceEpoch}';
         await _apiService.createTransaction(
-          challanId: int.parse(widget.rawChallanId),
+          challanId: widget.challan.challanId,
           orderStatus: 'failed',
           orderId: transactionId,
           paymentMethod: 'CARD',
-          amount: double.parse(widget.amount),
+          amount: widget.challan.fineAmount,
           notes: 'Failed card payment due to error: ${e.toString()}',
         );
       } catch (transError) {
@@ -884,8 +673,8 @@ class _PaymentPageViewState extends State<PaymentPageView> {
     await Future.delayed(const Duration(seconds: 2));
     final transaction = PaymentTransaction(
       transactionId: _generateTransactionId(),
-      challanId: widget.rawChallanId,
-      amount: widget.amount,
+      challanId: widget.challan.challanId.toString(),
+      amount: widget.challan.fineAmount.toString(),
       paymentMethod: 'UPI',
       status: 'COMPLETED',
       timestamp: DateTime.now(),
@@ -912,8 +701,8 @@ class _PaymentPageViewState extends State<PaymentPageView> {
     await Future.delayed(const Duration(seconds: 1));
     final transaction = PaymentTransaction(
       transactionId: _generateTransactionId(),
-      challanId: widget.rawChallanId,
-      amount: widget.amount,
+      challanId: widget.challan.challanId.toString(),
+      amount: widget.challan.fineAmount.toString(),
       paymentMethod: 'CASH',
       status: 'COMPLETED',
       timestamp: DateTime.now(),
@@ -1000,7 +789,7 @@ Widget _buildReceiptRow({
 /// Show receipt dialog
 Future<void> _showReceiptDialog(
   BuildContext context,
-  Map<String, dynamic> challan, [
+  ChallanResponse challan, [
   PaymentTransaction? transaction,
 ]) async {
   return showDialog<void>(
@@ -1094,16 +883,7 @@ Future<void> _showReceiptDialog(
                       ).format(DateTime.now()),
                       icon: Icons.calendar_today,
                     ),
-                    _buildReceiptRow(
-                      label: "Name",
-                      value: challan['name'] ?? 'N/A',
-                      icon: Icons.person,
-                    ),
-                    _buildReceiptRow(
-                      label: "Amount",
-                      value: "₹${challan['amount'] ?? 0}",
-                      icon: Icons.attach_money,
-                    ),
+
                     _buildReceiptRow(
                       label: "Payment Mode",
                       value: "Cash",
@@ -1131,17 +911,6 @@ Future<void> _showReceiptDialog(
                           color: Colors.grey[700],
                         ),
                       ),
-                    ),
-                    _buildReceiptRow(
-                      label: "Rule",
-                      value: challan['rule'] ?? 'N/A',
-                      icon: Icons.rule,
-                    ),
-                    _buildReceiptRow(
-                      label: "Total Amount",
-                      value: "₹${challan['amount'] ?? 0}",
-                      isTotal: true,
-                      icon: Icons.calculate,
                     ),
                   ],
                 ),
