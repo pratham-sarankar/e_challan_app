@@ -40,4 +40,11 @@ platform :android do
       service_credentials_file: "./serviceAccountKey.json"
     )
   end  
+
+  desc "Build and distribute release APK"
+  lane :deploy_apk do
+    build_release
+    distribute_apk
+  end
+
 end
