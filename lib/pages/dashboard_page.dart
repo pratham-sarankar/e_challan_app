@@ -557,10 +557,13 @@ class _DashboardPageState extends State<DashboardPage> {
                         Navigator.pop(context);
                         // clear auth data before navigating to login
                         await _clearAuthData();
-                        Navigator.pushAndRemoveUntil(
+                        if (!context.mounted) return;
+                        while (Navigator.canPop(context)) {
+                          Navigator.pop(context);
+                        }
+                        Navigator.push(
                           context,
                           MaterialPageRoute(builder: (_) => LoginPage()),
-                          (route) => false,
                         );
                       },
                       style: ElevatedButton.styleFrom(

@@ -492,12 +492,7 @@ class ChallanDetailsPageState extends State<ChallanDetailsPage> {
     final hasEvidence = widget.challan.imageUrls.isNotEmpty;
 
     return Scaffold(
-      appBar: AppBar(
-        title: Text('Challan Details'),
-        actions: [
-          IconButton(icon: Icon(Icons.print), onPressed: () => _printChallan()),
-        ],
-      ),
+      appBar: AppBar(title: Text('Challan Details')),
       body: Stack(
         children: [
           SingleChildScrollView(
@@ -582,27 +577,29 @@ class ChallanDetailsPageState extends State<ChallanDetailsPage> {
                   ),
                 ),
                 SizedBox(height: 40),
-                SizedBox(
-                  width: double.infinity,
-                  child: ElevatedButton.icon(
-                    icon: Icon(Icons.payment, size: 20),
-                    label: Text(
-                      'PAY NOW',
-                      style: TextStyle(fontWeight: FontWeight.bold),
+                if (_totalAmount < widget.challan.fineAmount)
+                  SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton.icon(
+                      icon: Icon(Icons.payment, size: 20),
+                      label: Text(
+                        'PAY NOW',
+                        style: TextStyle(fontWeight: FontWeight.bold),
+                      ),
+                      style: ElevatedButton.styleFrom(
+                        padding: EdgeInsets.symmetric(vertical: 14),
+                      ),
+                      onPressed: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) =>
+                                PaymentPage(challan: widget.challan),
+                          ),
+                        );
+                      },
                     ),
-                    style: ElevatedButton.styleFrom(
-                      padding: EdgeInsets.symmetric(vertical: 14),
-                    ),
-                    onPressed: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) => PaymentPage(challan: widget.challan),
-                        ),
-                      );
-                    },
                   ),
-                ),
               ],
             ),
           ),
@@ -614,15 +611,6 @@ class ChallanDetailsPageState extends State<ChallanDetailsPage> {
               ),
             ),
         ],
-      ),
-    );
-  }
-
-  void _printChallan() {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('Printing feature will be implemented soon'),
-        backgroundColor: Theme.of(context).colorScheme.primary,
       ),
     );
   }

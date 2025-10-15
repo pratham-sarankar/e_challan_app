@@ -31,21 +31,23 @@ class _PaymentPageState extends State<PaymentPage> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: const Text("Payment Options"), elevation: 0),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(24),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            _buildChallanInfoCard(context),
-            const SizedBox(height: 24),
-            _buildPaymentAmountCard(),
-            const SizedBox(height: 24),
-            _buildPaymentOptions(context),
-            const SizedBox(height: 12),
-            _buildHelpInfo(),
-          ],
+    return PopScope(
+      child: Scaffold(
+        appBar: AppBar(title: const Text("Payment Options"), elevation: 0),
+        body: SingleChildScrollView(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _buildChallanInfoCard(context),
+              const SizedBox(height: 24),
+              _buildPaymentAmountCard(),
+              const SizedBox(height: 24),
+              _buildPaymentOptions(context),
+              const SizedBox(height: 12),
+              _buildHelpInfo(),
+            ],
+          ),
         ),
       ),
     );
@@ -342,24 +344,10 @@ class _PaymentPageState extends State<PaymentPage> {
                 color: Colors.green,
               ),
             ),
-            const SizedBox(height: 8),
+            const SizedBox(height: 8, width: double.infinity),
             Text(
               "Receipt Number: ${transaction.receiptNumber}",
               style: TextStyle(color: Colors.grey[600]),
-            ),
-            const SizedBox(height: 24),
-            SizedBox(
-              width: double.infinity,
-              child: ElevatedButton.icon(
-                onPressed: () =>
-                    _showReceiptDialog(context, widget.challan, transaction),
-                icon: const Icon(Icons.receipt),
-                label: const Text("View Receipt"),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.green,
-                  padding: const EdgeInsets.symmetric(vertical: 16),
-                ),
-              ),
             ),
           ],
         ),
@@ -587,14 +575,28 @@ class _PaymentPageState extends State<PaymentPage> {
 
             // Show success message
             if (mounted) {
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(
-                  content: Text(
-                    'Payment successful! Transaction ID: $transactionId',
-                  ),
-                  backgroundColor: Colors.green,
-                  duration: Duration(seconds: 3),
-                ),
+              showDialog(
+                context: context,
+                barrierDismissible: false,
+                builder: (context) {
+                  return AlertDialog(
+                    title: const Text('Payment Successful'),
+                    content: Text(
+                      'Payment of ₹$formattedAmount was successful.\nReceipt Number: ${transaction.receiptNumber}',
+                    ),
+                    actions: [
+                      FilledButton(
+                        onPressed: () {
+                          // Navigate to home/dashboard page
+                          Navigator.of(
+                            context,
+                          ).popUntil((route) => route.isFirst);
+                        },
+                        child: const Text('OK'),
+                      ),
+                    ],
+                  );
+                },
               );
             }
           } catch (e) {
@@ -782,189 +784,6 @@ Widget _buildReceiptRow({
           ),
         ),
       ],
-    ),
-  );
-}
-
-/// Show receipt dialog
-Future<void> _showReceiptDialog(
-  BuildContext context,
-  ChallanResponse challan, [
-  PaymentTransaction? transaction,
-]) async {
-  return showDialog<void>(
-    context: context,
-    barrierDismissible: false,
-    builder: (_) => Dialog(
-      insetPadding: const EdgeInsets.all(16),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-      elevation: 8,
-      child: Container(
-        constraints: const BoxConstraints(maxWidth: 500, maxHeight: 600),
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(20),
-          color: Colors.white,
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.fromLTRB(20, 20, 20, 16),
-              decoration: const BoxDecoration(
-                color: Colors.green,
-                borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-              ),
-              child: SafeArea(
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Row(
-                      children: [
-                        Icon(Icons.receipt_long, color: Colors.white, size: 28),
-                        const SizedBox(width: 12),
-                        const Text(
-                          "PAYMENT RECEIPT",
-                          style: TextStyle(
-                            fontSize: 20,
-                            fontWeight: FontWeight.bold,
-                            color: Colors.white,
-                          ),
-                        ),
-                      ],
-                    ),
-                    IconButton(
-                      onPressed: () => Navigator.pop(context),
-                      icon: const Icon(
-                        Icons.close,
-                        color: Colors.white,
-                        size: 24,
-                      ),
-                      padding: EdgeInsets.zero,
-                      constraints: const BoxConstraints(
-                        minWidth: 32,
-                        minHeight: 32,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 20),
-              color: Colors.grey[50],
-              child: const Center(
-                child: Text(
-                  "Municipal Corporation Bilaspur",
-                  style: TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.black87,
-                  ),
-                ),
-              ),
-            ),
-            Flexible(
-              child: SingleChildScrollView(
-                padding: const EdgeInsets.all(20),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    _buildReceiptRow(
-                      label: "Receipt No.",
-                      value: "#${DateTime.now().millisecondsSinceEpoch}",
-                      icon: Icons.receipt,
-                    ),
-                    _buildReceiptRow(
-                      label: "Date & Time",
-                      value: DateFormat(
-                        'dd/MM/yyyy hh:mm a',
-                      ).format(DateTime.now()),
-                      icon: Icons.calendar_today,
-                    ),
-
-                    _buildReceiptRow(
-                      label: "Payment Mode",
-                      value: "Cash",
-                      icon: Icons.payment,
-                    ),
-                    _buildReceiptRow(
-                      label: "Status",
-                      value: "Paid",
-                      isStatus: true,
-                      icon: Icons.check_circle,
-                    ),
-                    const SizedBox(height: 24),
-                    Divider(
-                      thickness: 1.5,
-                      color: Colors.grey[300],
-                      height: 32,
-                    ),
-                    Padding(
-                      padding: EdgeInsets.symmetric(vertical: 8),
-                      child: Text(
-                        "Additional Details",
-                        style: TextStyle(
-                          fontSize: 14,
-                          fontWeight: FontWeight.w600,
-                          color: Colors.grey[700],
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-            Container(
-              padding: const EdgeInsets.all(20),
-              decoration: BoxDecoration(
-                color: Colors.grey[50],
-                borderRadius: const BorderRadius.vertical(
-                  bottom: Radius.circular(20),
-                ),
-              ),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: OutlinedButton.icon(
-                      onPressed: () => Navigator.pop(context),
-                      icon: const Icon(Icons.close, size: 20),
-                      label: const Text("CLOSE"),
-                      style: OutlinedButton.styleFrom(
-                        padding: const EdgeInsets.symmetric(vertical: 12),
-                        side: BorderSide(color: Colors.grey[400]!),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: ElevatedButton.icon(
-                      onPressed: () {
-                        Navigator.pop(context);
-                      },
-                      icon: const Icon(Icons.print, size: 20),
-                      label: const Text("PRINT"),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.green,
-                        foregroundColor: Colors.white,
-                        padding: const EdgeInsets.symmetric(vertical: 12),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        elevation: 2,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
-      ),
     ),
   );
 }

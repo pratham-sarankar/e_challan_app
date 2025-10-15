@@ -194,17 +194,14 @@ class _AddChallanPageState extends State<AddChallanPage> {
       // If user added images locally, upload them to the server for this challan
       if (images.isNotEmpty) {
         try {
-          final uploadData = await _api_service.uploadChallanImages(
+          final uploadedImageUrls = await _api_service.uploadChallanImages(
             newChallan.challanId,
             images,
           );
 
           // uploadData contains uploaded_files and total_uploaded per API sample
-          newChallan.imageUrls = uploadData['uploaded_files'] ?? [];
-          newChallan.imageCount =
-              uploadData['total_uploaded'] ??
-              (uploadData['uploaded_files'] as List?)?.length ??
-              0;
+          newChallan.imageUrls = uploadedImageUrls;
+          newChallan.imageCount = uploadedImageUrls.length;
         } catch (uploadErr) {
           // If image upload fails, show a message but keep the challan created
           ScaffoldMessenger.of(context).showSnackBar(

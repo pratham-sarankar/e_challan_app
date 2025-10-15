@@ -44,7 +44,7 @@ class ApiService {
   }
 
   /// Upload images for a challan (multipart/form-data). Returns parsed JSON data on success.
-  Future<Map<String, dynamic>> uploadChallanImages(
+  Future<List<String>> uploadChallanImages(
     int challanId,
     List<File> files,
   ) async {
@@ -83,7 +83,9 @@ class ApiService {
       if (decoded is Map &&
           decoded['status'] == 'success' &&
           decoded['data'] != null) {
-        return decoded['data'] as Map<String, dynamic>;
+        return List.from(
+          decoded['data']['uploaded_files'],
+        ).map<String>((upload) => upload['path']).toList();
       } else {
         throw Exception(decoded['message'] ?? 'Unexpected upload response');
       }
@@ -325,68 +327,6 @@ class ApiService {
         }
       } catch (_) {}
       throw Exception(msg);
-    }
-  }
-
-  /// Create a challan and (optionally) upload images associated with it.
-  ///
-  /// This method will:
-  /// 1. Create the challan by calling `createChallan`.
-  /// 2. If `files` is non-empty, upload them using the challan id returned by the server.
-  /// 3. Return the updated `ChallanResponse` (if upload returns updated challan data) or
-  ///    the original created `ChallanResponse`.
-  Future<ChallanResponse> createChallanWithImages({
-    required String fullName,
-    required String contactNumber,
-    required int challanTypeId,
-    required String challanName,
-    required int fineAmount,
-    required String description,
-    required String wardNumber,
-    required double latitude,
-    required double longitude,
-    List<File> files = const [],
-  }) async {
-    // 1) Create challan
-    final created = await createChallan(
-      fullName: fullName,
-      contactNumber: contactNumber,
-      challanTypeId: challanTypeId,
-      challanName: challanName,
-      fineAmount: fineAmount,
-      description: description,
-      wardNumber: wardNumber,
-      latitude: latitude,
-      longitude: longitude,
-    );
-
-    // If there are no files to upload, return the created challan immediately.
-    if (files.isEmpty) return created;
-
-    // Determine which id to use for uploading. Prefer challanId (server-facing), fall back to internal id.
-    final int uploadId = (created.challanId != 0)
-        ? created.challanId
-        : created.id;
-
-    try {
-      final uploadData = await uploadChallanImages(uploadId, files);
-      // uploadChallanImages returns decoded['data'] as Map<String, dynamic>.
-      // Try to parse it into a ChallanResponse if it looks like one.
-      if (uploadData.isNotEmpty) {
-        try {
-          return ChallanResponse.fromJson(uploadData);
-        } catch (_) {
-          // If parsing fails, just return the originally created challan.
-          return created;
-        }
-      } else {
-        return created;
-      }
-    } catch (e) {
-      // If upload fails, surface a descriptive error including challan id.
-      throw Exception(
-        'Challan created (id=$uploadId) but image upload failed: ${e.toString()}',
-      );
     }
   }
 
