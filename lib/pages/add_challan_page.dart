@@ -178,6 +178,10 @@ class _AddChallanPageState extends State<AddChallanPage> {
     final longitude = 0.0; // Default longitude since geolocation is disabled
 
     setState(() => _isSubmitting = true);
+
+    // Show loading dialog
+    _showLoadingDialog();
+
     try {
       final ChallanResponse newChallan = await _api_service.createChallan(
         fullName: fullName,
@@ -214,9 +218,13 @@ class _AddChallanPageState extends State<AddChallanPage> {
         }
       }
 
+      // Dismiss loading dialog
+      Navigator.of(context).pop();
+
       // Show success dialog (same as before)
       showDialog(
         context: context,
+        barrierDismissible: false,
         builder: (_) => Dialog(
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(16),
@@ -319,12 +327,183 @@ class _AddChallanPageState extends State<AddChallanPage> {
         ),
       );
     } catch (e) {
+      // Dismiss loading dialog
+      Navigator.of(context).pop();
+
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Failed to create challan: ${e.toString()}')),
       );
     } finally {
       if (mounted) setState(() => _isSubmitting = false);
     }
+  }
+
+  void _showLoadingDialog() {
+    showDialog(
+      context: context,
+      barrierDismissible: false, // Make dialog undismissible
+      builder: (BuildContext context) {
+        return PopScope(
+          canPop: false, // Prevent back button dismissal
+          child: Dialog(
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(20),
+            ),
+            elevation: 16,
+            child: Container(
+              padding: const EdgeInsets.all(24),
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(20),
+                gradient: LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: [
+                    Theme.of(context).colorScheme.surface,
+                    Theme.of(context).colorScheme.surface.withAlpha(245),
+                  ],
+                ),
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  // Animated loading indicator
+                  Container(
+                    width: 80,
+                    height: 80,
+                    decoration: BoxDecoration(
+                      color: Theme.of(
+                        context,
+                      ).colorScheme.primary.withAlpha(26),
+                      shape: BoxShape.circle,
+                    ),
+                    child: Stack(
+                      alignment: Alignment.center,
+                      children: [
+                        SizedBox(
+                          width: 60,
+                          height: 60,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 4,
+                            valueColor: AlwaysStoppedAnimation<Color>(
+                              Theme.of(context).colorScheme.primary,
+                            ),
+                          ),
+                        ),
+                        Icon(
+                          Icons.upload_file,
+                          color: Theme.of(context).colorScheme.primary,
+                          size: 28,
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 24),
+
+                  // Title
+                  Text(
+                    'Creating Challan',
+                    style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                      fontWeight: FontWeight.bold,
+                      color: Theme.of(context).colorScheme.onSurface,
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+
+                  // Description
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    child: Text(
+                      'Please wait while we create your challan and upload evidence images...',
+                      textAlign: TextAlign.center,
+                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                        color: Theme.of(
+                          context,
+                        ).colorScheme.onSurface.withAlpha(179),
+                        height: 1.4,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 20),
+
+                  // Progress steps indicator
+                  Container(
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: Theme.of(
+                        context,
+                      ).colorScheme.primary.withAlpha(13),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        _buildProgressStep(
+                          context,
+                          icon: Icons.description,
+                          label: 'Creating',
+                          isActive: true,
+                        ),
+                        Container(
+                          width: 24,
+                          height: 2,
+                          margin: const EdgeInsets.symmetric(horizontal: 8),
+                          decoration: BoxDecoration(
+                            color: Theme.of(
+                              context,
+                            ).colorScheme.primary.withAlpha(77),
+                            borderRadius: BorderRadius.circular(1),
+                          ),
+                        ),
+                        _buildProgressStep(
+                          context,
+                          icon: Icons.cloud_upload,
+                          label: 'Uploading',
+                          isActive: images.isNotEmpty,
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildProgressStep(
+    BuildContext context, {
+    required IconData icon,
+    required String label,
+    required bool isActive,
+  }) {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Container(
+          width: 36,
+          height: 36,
+          decoration: BoxDecoration(
+            color: isActive
+                ? Theme.of(context).colorScheme.primary
+                : Theme.of(context).colorScheme.primary.withAlpha(77),
+            shape: BoxShape.circle,
+          ),
+          child: Icon(icon, color: Colors.white, size: 18),
+        ),
+        const SizedBox(height: 4),
+        Text(
+          label,
+          style: Theme.of(context).textTheme.bodySmall?.copyWith(
+            color: isActive
+                ? Theme.of(context).colorScheme.primary
+                : Theme.of(context).colorScheme.onSurface.withAlpha(153),
+            fontWeight: isActive ? FontWeight.w600 : FontWeight.normal,
+          ),
+        ),
+      ],
+    );
   }
 
   @override
