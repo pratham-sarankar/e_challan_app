@@ -174,6 +174,20 @@ class ViewChallanPageState extends State<ViewChallanPage> {
                           duration: Duration(milliseconds: 400),
                           delay: Duration(milliseconds: index * 100),
                           child: ListTile(
+                            leading: CircleAvatar(
+                              backgroundColor: Theme.of(
+                                context,
+                              ).colorScheme.primaryContainer,
+                              foregroundColor: Theme.of(
+                                context,
+                              ).colorScheme.onPrimaryContainer,
+                              child: Text(
+                                challan.name.isNotEmpty
+                                    ? challan.name[0].toUpperCase()
+                                    : '?',
+                                style: TextStyle(fontWeight: FontWeight.bold),
+                              ),
+                            ),
                             onTap: () {
                               _showChallanDetails(context, challan);
                             },
@@ -187,7 +201,6 @@ class ViewChallanPageState extends State<ViewChallanPage> {
                                 color: Theme.of(context).colorScheme.primary,
                               ),
                             ),
-                            dense: true,
                           ),
                         ),
                       );
@@ -241,7 +254,6 @@ class ViewChallanPageState extends State<ViewChallanPage> {
               borderRadius: BorderRadius.circular(4),
             ),
           ),
-          dense: true,
         ),
       ),
     );

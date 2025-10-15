@@ -125,6 +125,43 @@ class ChallanDetailsPageState extends State<ChallanDetailsPage> {
             color: Colors.grey[200],
             child: Icon(Icons.broken_image, color: Colors.grey),
           ),
+          loadingBuilder: (context, child, loadingProgress) {
+            if (loadingProgress == null) return child;
+            final percentage = loadingProgress.expectedTotalBytes != null
+                ? loadingProgress.cumulativeBytesLoaded /
+                      loadingProgress.expectedTotalBytes!
+                : null;
+            return Container(
+              color: Colors.grey[200],
+              child: Center(
+                child: Stack(
+                  alignment: Alignment.center,
+                  children: [
+                    SizedBox.square(
+                      dimension: 50,
+                      child: CircularProgressIndicator(
+                        value: percentage,
+                        strokeWidth: 3,
+                        valueColor: AlwaysStoppedAnimation(
+                          Colors.grey.shade400,
+                        ),
+                        backgroundColor: Colors.grey.shade200,
+                      ),
+                    ),
+                    Text(
+                      percentage != null
+                          ? '${(percentage * 100).toStringAsFixed(0)}%'
+                          : '',
+                      style: TextStyle(
+                        color: Colors.grey[700],
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
         );
       }
 
