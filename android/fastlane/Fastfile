@@ -16,35 +16,71 @@
 default_platform(:android)
 
 platform :android do
-  desc "Build release APK"
-  lane :build_release do
+  desc "Build release APK for a specific flavor"
+  lane :build_release do |options|
+    flavor = options[:flavor] || "production"
+    
     # Clean project
     sh "flutter clean"
 
     # Get dependencies
     sh "flutter pub get"
 
-    # Build the release APK (unsigned)
-    sh "flutter build apk --release"
+    # Build the release APK for the specified flavor
+    # Flutter will generate APKs at: build/app/outputs/flutter-apk/app-{flavor}-release.apk
+    sh "flutter build apk --release --flavor #{flavor}"
 
-    UI.message("✅ APK built successfully and stored at build/app/outputs/flutter-apk/app-release.apk")
+    UI.message("✅ APK built successfully for #{flavor} flavor")
+    UI.message("   Location: build/app/outputs/flutter-apk/app-#{flavor}-release.apk")
+  end
+
+  desc "Build release APKs for all flavors (development and production)"
+  lane :build_all_flavors do
+    # Build development flavor APK
+    # This creates: build/app/outputs/flutter-apk/app-development-release.apk
+    build_release(flavor: "development")
+    
+    # Build production flavor APK
+    # This creates: build/app/outputs/flutter-apk/app-production-release.apk
+    build_release(flavor: "production")
+    
+    UI.success("✅ All flavor APKs built successfully!")
+    UI.message("   Development APK: build/app/outputs/flutter-apk/app-development-release.apk")
+    UI.message("   Production APK: build/app/outputs/flutter-apk/app-production-release.apk")
   end
 
   desc "Distribute APK using Firebase App Distribution"
-  lane :distribute_apk do
+  lane :distribute_apk do |options|
+    flavor = options[:flavor] || "production"
+    
     firebase_app_distribution(
       app: "1:995006198955:android:3d3860973054a06e34f3ee",  
       android_artifact_type: "APK",
-      android_artifact_path: "../build/app/outputs/flutter-apk/app-release.apk",
+      android_artifact_path: "../build/app/outputs/flutter-apk/app-#{flavor}-release.apk",
       groups: "internal-testers", 
       service_credentials_file: "./serviceAccountKey.json"
     )
   end  
 
-  desc "Build and distribute release APK"
-  lane :deploy_apk do
-    build_release
-    distribute_apk
+  desc "Build and distribute release APK for a specific flavor"
+  lane :deploy_apk do |options|
+    flavor = options[:flavor] || "production"
+    build_release(flavor: flavor)
+    distribute_apk(flavor: flavor)
+  end
+
+  desc "Build and distribute APKs for all flavors"
+  lane :deploy_all_flavors do
+    # Build all flavors first
+    build_all_flavors
+    
+    # Distribute development flavor
+    distribute_apk(flavor: "development")
+    
+    # Distribute production flavor
+    distribute_apk(flavor: "production")
+    
+    UI.success("✅ All flavors built and distributed successfully!")
   end
 
 end

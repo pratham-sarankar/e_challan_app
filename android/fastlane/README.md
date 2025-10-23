@@ -21,7 +21,15 @@ For _fastlane_ installation instructions, see [Installing _fastlane_](https://do
 [bundle exec] fastlane android build_release
 ```
 
-Build release APK
+Build release APK for a specific flavor
+
+### android build_all_flavors
+
+```sh
+[bundle exec] fastlane android build_all_flavors
+```
+
+Build release APKs for all flavors (development and production)
 
 ### android distribute_apk
 
@@ -30,6 +38,22 @@ Build release APK
 ```
 
 Distribute APK using Firebase App Distribution
+
+### android deploy_apk
+
+```sh
+[bundle exec] fastlane android deploy_apk
+```
+
+Build and distribute release APK for a specific flavor
+
+### android deploy_all_flavors
+
+```sh
+[bundle exec] fastlane android deploy_all_flavors
+```
+
+Build and distribute APKs for all flavors
 
 ----
 
