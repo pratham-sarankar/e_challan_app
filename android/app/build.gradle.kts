@@ -42,6 +42,22 @@ android {
         versionName = flutter.versionName
     }
 
+    // Product Flavors Configuration
+    // Two flavors are defined: development and production
+    // - development: applicationId = e_challan.sublimeai.app.dev (allows installing alongside production)
+    // - production: applicationId = e_challan.sublimeai.app (default production app)
+    flavorDimensions += "environment"
+    productFlavors {
+        create("development") {
+            dimension = "environment"
+            applicationIdSuffix = ".dev"
+            versionNameSuffix = "-dev"
+        }
+        create("production") {
+            dimension = "environment"
+        }
+    }
+
     signingConfigs {
         create("release") {
             keyAlias = keystoreProperties["keyAlias"] as String
