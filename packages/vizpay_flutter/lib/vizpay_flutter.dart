@@ -2,10 +2,37 @@ import 'dart:async';
 
 import 'package:flutter/services.dart';
 
-/// Dart API for Vizpay ICICI Verifone Flutter plugin.
-/// Currently supports **SALE** transaction only.
+/// Dart API for Vizpay ICICI Flutter plugin.
+/// Currently supports **SALE** and **UPI** transaction.
+/// 
+/// The plugin supports different ICICI payment apps based on the build flavor:
+/// - Development flavor: Uses com.icici.viz.verifone
+/// - Production flavor: Uses com.icici.viz.pax
+/// 
+/// Call [setPaymentAppPackage] before making any transactions to specify
+/// which payment app package to use.
 class VizpayFlutter {
   static const MethodChannel _channel = MethodChannel('vizpay_flutter');
+
+  /// Sets the payment app package name to use for transactions.
+  /// 
+  /// This should be called during app initialization to configure which
+  /// ICICI payment app to use:
+  /// - For development: "com.icici.viz.verifone"
+  /// - For production: "com.icici.viz.pax"
+  /// 
+  /// Example:
+  /// ```dart
+  /// await VizpayFlutter.setPaymentAppPackage("com.icici.viz.verifone");
+  /// ```
+  static Future<bool> setPaymentAppPackage(String packageName) async {
+    try {
+      final result = await _channel.invokeMethod('setPaymentAppPackage', packageName);
+      return result == true;
+    } catch (e) {
+      return false;
+    }
+  }
 
   /// Starts a SALE transaction.
   ///
