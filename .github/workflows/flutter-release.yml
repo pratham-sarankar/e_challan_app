@@ -36,12 +36,12 @@ jobs:
           echo "${{ secrets.KEY_PROPERTIES }}" | base64 --decode > android/key.properties
           echo "${{ secrets.SERVICE_ACCOUNT_KEY }}" | base64 --decode > android/serviceAccountKey.json
       
-      # Build APKs for both development and production flavors
+      # Build and distribute APKs for both development and production flavors
       # This creates:
       # - build/app/outputs/flutter-apk/app-development-release.apk
       # - build/app/outputs/flutter-apk/app-production-release.apk
-      - name: Build release APKs for all flavors
-        run: fastlane build_all_flavors
+      - name: Build and distribute release APKs for all flavors
+        run: fastlane deploy_all_flavors
         working-directory: android
 
       # Upload both APK artifacts to the GitHub Release
