@@ -36,14 +36,21 @@ jobs:
           echo "${{ secrets.KEY_PROPERTIES }}" | base64 --decode > android/key.properties
           echo "${{ secrets.SERVICE_ACCOUNT_KEY }}" | base64 --decode > android/serviceAccountKey.json
       
-      - name: Build and distribute release APK
-        run: fastlane deploy_apk
+      # Build APKs for both development and production flavors
+      # This creates:
+      # - build/app/outputs/flutter-apk/app-development-release.apk
+      # - build/app/outputs/flutter-apk/app-production-release.apk
+      - name: Build release APKs for all flavors
+        run: fastlane build_all_flavors
         working-directory: android
 
+      # Upload both APK artifacts to the GitHub Release
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          files: build/app/outputs/flutter-apk/app-release.apk
+          files: |
+            build/app/outputs/flutter-apk/app-development-release.apk
+            build/app/outputs/flutter-apk/app-production-release.apk
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 

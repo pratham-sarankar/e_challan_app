@@ -42,6 +42,21 @@ android {
         versionName = flutter.versionName
     }
 
+    // Configure product flavors for development and production environments
+    flavorDimensions += "environment"
+    productFlavors {
+        create("development") {
+            dimension = "environment"
+            applicationIdSuffix = ".dev"
+            versionNameSuffix = "-dev"
+            // Development flavor for testing and internal builds
+        }
+        create("production") {
+            dimension = "environment"
+            // Production flavor for release builds
+        }
+    }
+
     signingConfigs {
         create("release") {
             keyAlias = keystoreProperties["keyAlias"] as String
