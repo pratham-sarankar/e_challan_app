@@ -12,16 +12,34 @@ import io.flutter.plugin.common.MethodCall
 import io.flutter.plugin.common.MethodChannel
 import org.json.JSONObject
 
+/**
+ * VizpayFlutterPlugin - Flutter plugin for ICICI Vizpay payment integration
+ * 
+ * This plugin supports different ICICI payment apps based on the build flavor:
+ * - Development flavor: Uses com.icici.viz.verifone
+ * - Production flavor: Uses com.icici.viz.pax
+ * 
+ * The payment app package name is determined dynamically from the main app's
+ * BuildConfig and passed to this plugin during initialization.
+ */
 class VizpayFlutterPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware {
     private lateinit var channel: MethodChannel
     private var activity: Activity? = null
     private var pendingResult: MethodChannel.Result? = null
 
     private val REQUEST_CODE_SALE = 101
-
     private val REQUEST_QR_SALE = 103
 
-    private val PACKAGE_NAME = "com.icici.viz.verifone"
+    /**
+     * Package name for the ICICI payment app.
+     * This is set dynamically based on the build flavor:
+     * - Development: com.icici.viz.verifone
+     * - Production: com.icici.viz.pax
+     * 
+     * Default is set to verifone for backward compatibility.
+     */
+    private var paymentAppPackageName: String = "com.icici.viz.verifone"
+    
     private val SALE = "SALE"
     private val QR = "QR"
 
@@ -63,14 +81,30 @@ class VizpayFlutterPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, Acti
             result.error("NO_ACTIVITY", "Plugin not attached to an Activity", null)
             return
         }
-        pendingResult = result
-        if (call.method == "startSaleTransaction") {
-            startSale(call.arguments as Map<*, *>)
-        } else if(call.method=="startUpiTransaction"){
-            startUpiTransaction(call.arguments as Map<*,*>)
-        }
-        else {
-            result.notImplemented()
+        
+        when (call.method) {
+            "setPaymentAppPackage" -> {
+                // Set the payment app package name dynamically
+                val packageName = call.arguments as? String
+                if (packageName != null && packageName.isNotEmpty()) {
+                    paymentAppPackageName = packageName
+                    Log.d("VizpayFlutter", "Payment app package set to: $paymentAppPackageName")
+                    result.success(true)
+                } else {
+                    result.error("INVALID_PACKAGE", "Package name cannot be null or empty", null)
+                }
+            }
+            "startSaleTransaction" -> {
+                pendingResult = result
+                startSale(call.arguments as Map<*, *>)
+            }
+            "startUpiTransaction" -> {
+                pendingResult = result
+                startUpiTransaction(call.arguments as Map<*, *>)
+            }
+            else -> {
+                result.notImplemented()
+            }
         }
     }
 
@@ -96,10 +130,11 @@ class VizpayFlutterPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, Acti
             saleRequest.put("UDF5", "")
 
             Log.d("VizpayFlutter", "QR Request: $saleRequest")
+            Log.d("VizpayFlutter", "Using payment app package: $paymentAppPackageName")
 
-            val intent = activity!!.packageManager.getLaunchIntentForPackage(PACKAGE_NAME)
+            val intent = activity!!.packageManager.getLaunchIntentForPackage(paymentAppPackageName)
             if (intent == null) {
-                pendingResult?.error("APP_NOT_INSTALLED", "ICICI Verifone app not installed", null)
+                pendingResult?.error("APP_NOT_INSTALLED", "ICICI payment app ($paymentAppPackageName) not installed", null)
                 pendingResult = null
                 return
             }
@@ -137,10 +172,11 @@ class VizpayFlutterPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, Acti
             saleRequest.put("UDF5", "")
 
             Log.d("VizpayFlutter", "Sale Request: $saleRequest")
+            Log.d("VizpayFlutter", "Using payment app package: $paymentAppPackageName")
 
-            val intent = activity!!.packageManager.getLaunchIntentForPackage(PACKAGE_NAME)
+            val intent = activity!!.packageManager.getLaunchIntentForPackage(paymentAppPackageName)
             if (intent == null) {
-                pendingResult?.error("APP_NOT_INSTALLED", "ICICI Verifone app not installed", null)
+                pendingResult?.error("APP_NOT_INSTALLED", "ICICI payment app ($paymentAppPackageName) not installed", null)
                 pendingResult = null
                 return
             }
