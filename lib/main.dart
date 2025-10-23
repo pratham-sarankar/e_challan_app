@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:municipal_e_challan/pages/splash_screen.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:municipal_e_challan/utils/payment_config.dart';
 
 // Create this class (e.g., in your main.dart or a separate http_overrides.dart file)
 class MyHttpOverrides extends HttpOverrides {
@@ -15,8 +16,18 @@ class MyHttpOverrides extends HttpOverrides {
   }
 }
 
-void main() {
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  
+  // Initialize HTTP overrides
   HttpOverrides.global = MyHttpOverrides();
+  
+  // Initialize payment configuration based on build flavor
+  // This configures the vizpay plugin to use the correct ICICI payment app:
+  // - Development: com.icici.viz.verifone
+  // - Production: com.icici.viz.pax
+  await PaymentConfig.initialize();
+  
   runApp(const MyApp());
 }
 
