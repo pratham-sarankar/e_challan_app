@@ -23,21 +23,6 @@ For _fastlane_ installation instructions, see [Installing _fastlane_](https://do
 
 Build release APK for a specific flavor
 
-**Options:**
-- `flavor`: Specify the flavor to build (development or production). Default: production
-
-**Examples:**
-```sh
-# Build production flavor (default)
-fastlane android build_release
-
-# Build development flavor
-fastlane android build_release flavor:development
-
-# Build production flavor explicitly
-fastlane android build_release flavor:production
-```
-
 ### android build_all_flavors
 
 ```sh
@@ -45,10 +30,6 @@ fastlane android build_release flavor:production
 ```
 
 Build release APKs for all flavors (development and production)
-
-This lane builds APKs for both flavors:
-- Development: `build/app/outputs/flutter-apk/app-development-release.apk`
-- Production: `build/app/outputs/flutter-apk/app-production-release.apk`
 
 ### android distribute_apk
 
@@ -58,18 +39,6 @@ This lane builds APKs for both flavors:
 
 Distribute APK using Firebase App Distribution
 
-**Options:**
-- `flavor`: Specify the flavor to distribute (development or production). Default: production
-
-**Examples:**
-```sh
-# Distribute production flavor (default)
-fastlane android distribute_apk
-
-# Distribute development flavor
-fastlane android distribute_apk flavor:development
-```
-
 ### android deploy_apk
 
 ```sh
@@ -78,9 +47,6 @@ fastlane android distribute_apk flavor:development
 
 Build and distribute release APK for a specific flavor
 
-**Options:**
-- `flavor`: Specify the flavor to deploy (development or production). Default: production
-
 ### android deploy_all_flavors
 
 ```sh
@@ -88,21 +54,6 @@ Build and distribute release APK for a specific flavor
 ```
 
 Build and distribute APKs for all flavors
-
-----
-
-## Product Flavors
-
-The project supports two product flavors:
-
-1. **Development** (`development`):
-   - Application ID: `e_challan.sublimeai.app.dev`
-   - Version suffix: `-dev`
-   - Used for internal testing and development builds
-
-2. **Production** (`production`):
-   - Application ID: `e_challan.sublimeai.app`
-   - Used for release builds to end users
 
 ----
 
