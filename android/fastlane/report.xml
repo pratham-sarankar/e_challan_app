@@ -5,12 +5,82 @@
     
     
       
-      <testcase classname="fastlane.lanes" name="0: default_platform" time="0.000171">
+      <testcase classname="fastlane.lanes" name="00: default_platform" time="0.000162">
         
       </testcase>
     
       
-      <testcase classname="fastlane.lanes" name="1: firebase_app_distribution" time="15.15202">
+      <testcase classname="fastlane.lanes" name="01: Switch to android clean lane" time="6.8e-05">
+        
+      </testcase>
+    
+      
+      <testcase classname="fastlane.lanes" name="02: flutter clean" time="1.518545">
+        
+      </testcase>
+    
+      
+      <testcase classname="fastlane.lanes" name="03: flutter pub get" time="1.708463">
+        
+      </testcase>
+    
+      
+      <testcase classname="fastlane.lanes" name="04: Switch to android build_all_flavors lane" time="0.000205">
+        
+      </testcase>
+    
+      
+      <testcase classname="fastlane.lanes" name="05: Switch to android clean lane" time="7.0e-05">
+        
+      </testcase>
+    
+      
+      <testcase classname="fastlane.lanes" name="06: flutter clean" time="0.709336">
+        
+      </testcase>
+    
+      
+      <testcase classname="fastlane.lanes" name="07: flutter pub get" time="1.986228">
+        
+      </testcase>
+    
+      
+      <testcase classname="fastlane.lanes" name="08: Switch to android build_release lane" time="0.000251">
+        
+      </testcase>
+    
+      
+      <testcase classname="fastlane.lanes" name="09: flutter build apk --release --flavor development" time="70.823542">
+        
+      </testcase>
+    
+      
+      <testcase classname="fastlane.lanes" name="10: Switch to android build_release lane" time="0.001304">
+        
+      </testcase>
+    
+      
+      <testcase classname="fastlane.lanes" name="11: flutter build apk --release --flavor production" time="46.850164">
+        
+      </testcase>
+    
+      
+      <testcase classname="fastlane.lanes" name="12: Switch to android distribute_apk lane" time="0.000777">
+        
+      </testcase>
+    
+      
+      <testcase classname="fastlane.lanes" name="13: firebase_app_distribution" time="20.372165">
+        
+      </testcase>
+    
+      
+      <testcase classname="fastlane.lanes" name="14: Switch to android distribute_apk lane" time="0.000477">
+        
+      </testcase>
+    
+      
+      <testcase classname="fastlane.lanes" name="15: firebase_app_distribution" time="13.297127">
         
       </testcase>
     
