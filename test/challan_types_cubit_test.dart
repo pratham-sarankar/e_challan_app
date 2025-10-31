@@ -61,7 +61,7 @@ void main() {
       build: () {
         when(mockApiService.getChallanTypes())
             .thenThrow(Exception('Network error'));
-        when(mockApiService.lastGetChallanTypesStatus).thenReturn(500);
+        when(mockApiService.getLastChallanTypesStatus()).thenReturn(500);
         return cubit;
       },
       act: (cubit) => cubit.loadChallanTypes(),

@@ -646,7 +646,7 @@ class _AddChallanPageState extends State<AddChallanPage> {
                                     content: Text(
                                   'Selected: ${value.typeName} — ₹${value.fineAmount}',
                                 ),
-                                duration: Duration(milliseconds: 900),
+                                duration: const Duration(milliseconds: 900),
                               ),
                             );
                           }

@@ -71,14 +71,14 @@ class _InformationPageState extends State<InformationPage> {
       _cubit.loadChallanTypes();
     } else {
       // No token yet: start a short-lived polling timer
-      _prefsPollTimer = Timer.periodic(Duration(seconds: 1), (t) async {
+      _prefsPollTimer = Timer.periodic(const Duration(seconds: 1), (t) async {
         final prefs = await SharedPreferences.getInstance();
         final token = prefs.getString('access_token');
         if (token != null && token.isNotEmpty) {
           t.cancel();
           _prefsPollTimer = null;
           // Give a tiny delay to allow other parts of the app to finish storing state
-          await Future.delayed(Duration(milliseconds: 200));
+          await Future.delayed(const Duration(milliseconds: 200));
           if (mounted) _cubit.loadChallanTypes();
         }
       });
