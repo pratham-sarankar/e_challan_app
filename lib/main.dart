@@ -4,6 +4,9 @@ import 'package:flutter/material.dart';
 import 'package:municipal_e_challan/pages/splash_screen.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:municipal_e_challan/utils/payment_config.dart';
+import 'package:municipal_e_challan/services/service_locator.dart';
+import 'package:municipal_e_challan/cubits/challan_types_cubit.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 // Create this class (e.g., in your main.dart or a separate http_overrides.dart file)
 class MyHttpOverrides extends HttpOverrides {
@@ -28,7 +31,35 @@ void main() async {
   // - Production: com.icici.viz.pax
   await PaymentConfig.initialize();
   
+  // Initialize service locator
+  await setupServiceLocator();
+  
+  // Load challan types at startup if user is already logged in
+  // This ensures the data is ready when forms are opened
+  await _initializeChallanTypes();
+  
   runApp(const MyApp());
+}
+
+/// Initialize challan types if user has an access token
+/// 
+/// This loads challan types early during app startup to improve
+/// performance when opening forms later.
+Future<void> _initializeChallanTypes() async {
+  try {
+    final prefs = await SharedPreferences.getInstance();
+    final token = prefs.getString('access_token');
+    
+    // Only load if user is logged in
+    if (token != null && token.isNotEmpty) {
+      final cubit = getIt<ChallanTypesCubit>();
+      await cubit.loadChallanTypes();
+    }
+  } catch (e) {
+    // Don't block app startup if challan types fail to load
+    // They can be retried later from the UI
+    print('[main] Failed to preload challan types: $e');
+  }
 }
 
 class MyApp extends StatelessWidget {
