@@ -1,10 +1,14 @@
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:municipal_e_challan/models/challan_response.dart';
 import 'package:municipal_e_challan/models/challan_type.dart';
 import 'package:municipal_e_challan/services/api_services.dart';
+import 'package:municipal_e_challan/services/service_locator.dart';
+import 'package:municipal_e_challan/cubits/challan_types_cubit.dart';
+import 'package:municipal_e_challan/cubits/challan_types_state.dart';
 import 'package:permission_handler/permission_handler.dart';
 
 import 'payment_page.dart';
@@ -26,10 +30,8 @@ class _AddChallanPageState extends State<AddChallanPage> {
   List<File> images = [];
   final ApiService _api_service = ApiService();
   bool _isSubmitting = false;
-  List<ChallanType> _challanTypes = [];
-  bool _isLoadingTypes = false;
 
-  // (rulesInfo removed — dropdown driven only by server)
+  late ChallanTypesCubit _cubit;
 
   // Unselected by default; holds the chosen ChallanType from API
   ChallanType? _selectedType;
@@ -37,52 +39,22 @@ class _AddChallanPageState extends State<AddChallanPage> {
   @override
   void initState() {
     super.initState();
-    _loadChallanTypes();
+    // Get the global cubit from service locator
+    _cubit = getIt<ChallanTypesCubit>();
+    
+    // Load challan types if not already loaded
+    if (_cubit.state is ChallanTypesInitial) {
+      _cubit.loadChallanTypes();
+    }
   }
 
-  Future<void> _loadChallanTypes() async {
-    setState(() => _isLoadingTypes = true);
-    try {
-      final types = await _api_service.getChallanTypes();
-      // Debug: log loaded types
-      for (final t in types) {
-        print('[AddChallanPage] type=${t.typeName} fine=${t.fineAmount}');
-      }
-      setState(() {
-        _challanTypes = types;
-      });
-
-      // If a type was previously selected, try to rebind it to the newly-loaded list
-      if (_selectedType != null) {
-        final selName = _selectedType!.typeName.trim().toLowerCase();
-        try {
-          final restored = _challanTypes.firstWhere(
-            (t) => t.typeName.trim().toLowerCase() == selName,
-          );
-          setState(() {
-            _selectedType = restored;
-            amountController.text = restored.fineAmount.toString();
-          });
-        } catch (_) {
-          // previously selected type not present in new list; clear selection
-          setState(() {
-            _selectedType = null;
-            amountController.clear();
-          });
-        }
-      }
-    } catch (e) {
-      // show a small UI message so developers/testers know fetching failed
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Failed to load challan types: ${e.toString()}'),
-          ),
-        );
-      }
-    } finally {
-      if (mounted) setState(() => _isLoadingTypes = false);
+  /// Helper method to get challan types from cubit state
+  List<ChallanType> _getChallanTypes() {
+    final state = _cubit.state;
+    if (state is ChallanTypesLoaded) {
+      return state.challanTypes;
     }
+    return [];
   }
 
   @override
@@ -130,8 +102,11 @@ class _AddChallanPageState extends State<AddChallanPage> {
     final contactNumber = mobileController.text.trim();
     final challanName = _selectedType?.typeName ?? 'Violation';
 
+    // Get challan types using helper method
+    final challanTypes = _getChallanTypes();
+
     // Require server-provided challan types — do not fall back to static rules
-    if (_challanTypes.isEmpty) {
+    if (challanTypes.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
@@ -571,83 +546,107 @@ class _AddChallanPageState extends State<AddChallanPage> {
                   },
                 ),
                 SizedBox(height: 16),
-                // Use only API-provided challan types for the dropdown. Show loading/empty UI as needed.
-                if (_isLoadingTypes)
-                  Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 8.0),
-                    child: Row(
-                      children: [
-                        SizedBox(
-                          width: 20,
-                          height: 20,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        ),
-                        SizedBox(width: 12),
-                        Text('Loading rule violations...'),
-                      ],
-                    ),
-                  )
-                else if (_challanTypes.isEmpty)
-                  // No types from server — inform user and disable submission
-                  Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 8.0),
-                    child: InputDecorator(
-                      decoration: InputDecoration(
-                        labelText: 'Select Rule Violation',
-                        prefixIcon: Icon(Icons.gavel_outlined),
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                      ),
-                      child: Text('No rule violations available'),
-                    ),
-                  )
-                else
-                  DropdownButtonFormField<ChallanType>(
-                    isExpanded: true,
-                    // Use initialValue instead of the deprecated `value`.
-                    // Add a key so the FormField is recreated when the selected
-                    // type changes — this ensures the initialValue reflects
-                    // programmatic updates to `_selectedType`.
-                    key: ValueKey(_selectedType?.id ?? 'none'),
-                    initialValue: _selectedType,
-                    decoration: InputDecoration(
-                      labelText: "Select Rule Violation",
-                      prefixIcon: Icon(Icons.gavel_outlined),
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      hintText: 'Choose a rule',
-                    ),
-                    items: _challanTypes
-                        .map(
-                          (t) => DropdownMenuItem<ChallanType>(
-                            value: t,
-                            // Only show the type name (no fine amount in dropdown)
-                            child: Text(
-                              t.typeName,
-                              style: TextStyle(fontSize: 14),
-                              overflow: TextOverflow.ellipsis,
+                // Use BlocBuilder to reactively display challan types from global cubit
+                BlocBuilder<ChallanTypesCubit, ChallanTypesState>(
+                  bloc: _cubit,
+                  builder: (context, state) {
+                    if (state is ChallanTypesLoading) {
+                      return Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 8.0),
+                        child: Row(
+                          children: [
+                            SizedBox(
+                              width: 20,
+                              height: 20,
+                              child: CircularProgressIndicator(strokeWidth: 2),
                             ),
+                            SizedBox(width: 12),
+                            Text('Loading rule violations...'),
+                          ],
+                        ),
+                      );
+                    } else if (state is ChallanTypesError) {
+                      return Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 8.0),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            InputDecorator(
+                              decoration: InputDecoration(
+                                labelText: 'Select Rule Violation',
+                                prefixIcon: Icon(Icons.gavel_outlined),
+                                border: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                              ),
+                              child: Text('Error loading rule violations'),
+                            ),
+                            SizedBox(height: 8),
+                            ElevatedButton.icon(
+                              onPressed: () => _cubit.retry(),
+                              icon: Icon(Icons.refresh),
+                              label: Text('Retry'),
+                            ),
+                          ],
+                        ),
+                      );
+                    } else if (state is ChallanTypesLoaded) {
+                      final challanTypes = state.challanTypes;
+                      if (challanTypes.isEmpty) {
+                        return Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 8.0),
+                          child: InputDecorator(
+                            decoration: InputDecoration(
+                              labelText: 'Select Rule Violation',
+                              prefixIcon: Icon(Icons.gavel_outlined),
+                              border: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                            ),
+                            child: Text('No rule violations available'),
                           ),
-                        )
-                        .toList(),
-                    onChanged: (ChallanType? value) {
-                      setState(() {
-                        _selectedType = value;
-                        if (value != null) {
-                          amountController.text = value.fineAmount.toString();
-                          // Debug log selection
-                          print(
-                            '[AddChallanPage] selected type=${value.typeName} fine=${value.fineAmount}',
-                          );
-                          if (mounted) {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(
-                                content: Text(
+                        );
+                      }
+
+                      return DropdownButtonFormField<ChallanType>(
+                        isExpanded: true,
+                        key: ValueKey(_selectedType?.id ?? 'none'),
+                        initialValue: _selectedType,
+                        decoration: InputDecoration(
+                          labelText: "Select Rule Violation",
+                          prefixIcon: Icon(Icons.gavel_outlined),
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          hintText: 'Choose a rule',
+                        ),
+                        items: challanTypes
+                            .map(
+                              (t) => DropdownMenuItem<ChallanType>(
+                                value: t,
+                                child: Text(
+                                  t.typeName,
+                                  style: TextStyle(fontSize: 14),
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                            )
+                            .toList(),
+                        onChanged: (ChallanType? value) {
+                          setState(() {
+                            _selectedType = value;
+                            if (value != null) {
+                              amountController.text = value.fineAmount.toString();
+                              print(
+                                '[AddChallanPage] selected type=${value.typeName} fine=${value.fineAmount}',
+                              );
+                              if (mounted) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(
+                                    content: Text(
                                   'Selected: ${value.typeName} — ₹${value.fineAmount}',
                                 ),
-                                duration: Duration(milliseconds: 900),
+                                duration: const Duration(milliseconds: 900),
                               ),
                             );
                           }
@@ -662,7 +661,26 @@ class _AddChallanPageState extends State<AddChallanPage> {
                       }
                       return null;
                     },
-                  ),
+                  );
+                    } else {
+                      // Initial state - should not happen since we load in initState
+                      return Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 8.0),
+                        child: Row(
+                          children: [
+                            SizedBox(
+                              width: 20,
+                              height: 20,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            ),
+                            SizedBox(width: 12),
+                            Text('Initializing...'),
+                          ],
+                        ),
+                      );
+                    }
+                  },
+                ),
                 SizedBox(height: 16),
                 TextFormField(
                   controller: amountController,
