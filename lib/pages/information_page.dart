@@ -55,8 +55,8 @@ class _InformationPageState extends State<InformationPage> {
     // Get the global cubit from service locator
     _cubit = getIt<ChallanTypesCubit>();
     
-    // If challan types haven't been loaded yet, load them now
-    if (_cubit.state is ChallanTypesInitial) {
+    // Load challan types if not already loaded or in error state
+    if (_cubit.state is ChallanTypesInitial || _cubit.state is ChallanTypesError) {
       _initLoad();
     }
   }

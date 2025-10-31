@@ -48,6 +48,15 @@ class _AddChallanPageState extends State<AddChallanPage> {
     }
   }
 
+  /// Helper method to get challan types from cubit state
+  List<ChallanType> _getChallanTypes() {
+    final state = _cubit.state;
+    if (state is ChallanTypesLoaded) {
+      return state.challanTypes;
+    }
+    return [];
+  }
+
   @override
   void dispose() {
     nameController.dispose();
@@ -93,12 +102,8 @@ class _AddChallanPageState extends State<AddChallanPage> {
     final contactNumber = mobileController.text.trim();
     final challanName = _selectedType?.typeName ?? 'Violation';
 
-    // Get challan types from cubit state
-    final cubitState = _cubit.state;
-    List<ChallanType> challanTypes = [];
-    if (cubitState is ChallanTypesLoaded) {
-      challanTypes = cubitState.challanTypes;
-    }
+    // Get challan types using helper method
+    final challanTypes = _getChallanTypes();
 
     // Require server-provided challan types — do not fall back to static rules
     if (challanTypes.isEmpty) {

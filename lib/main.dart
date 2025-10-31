@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:municipal_e_challan/pages/splash_screen.dart';
@@ -44,7 +45,8 @@ void main() async {
 /// Initialize challan types if user has an access token
 /// 
 /// This loads challan types early during app startup to improve
-/// performance when opening forms later.
+/// performance when opening forms later. Uses unawaited to prevent
+/// blocking app startup.
 Future<void> _initializeChallanTypes() async {
   try {
     final prefs = await SharedPreferences.getInstance();
@@ -53,7 +55,8 @@ Future<void> _initializeChallanTypes() async {
     // Only load if user is logged in
     if (token != null && token.isNotEmpty) {
       final cubit = getIt<ChallanTypesCubit>();
-      await cubit.loadChallanTypes();
+      // Use unawaited to prevent blocking app startup
+      unawaited(cubit.loadChallanTypes());
     }
   } catch (e) {
     // Don't block app startup if challan types fail to load

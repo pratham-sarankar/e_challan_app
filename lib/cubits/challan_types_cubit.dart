@@ -32,11 +32,12 @@ class ChallanTypesCubit extends Cubit<ChallanTypesState> {
       print('[ChallanTypesCubit] Error loading challan types: $e');
       
       // Retry logic for transient errors (e.g., 401 auth issues during startup)
-      final status = _apiService.lastGetChallanTypesStatus;
+      // Use the getter method for consistency
+      final status = _apiService.getLastChallanTypesStatus();
       if ((status == 401 || status == 0) && attempt < 3) {
         final nextAttempt = attempt + 1;
         print('[ChallanTypesCubit] Retrying (attempt $nextAttempt)...');
-        await Future.delayed(Duration(milliseconds: 800));
+        await Future.delayed(const Duration(milliseconds: 800));
         return loadChallanTypes(attempt: nextAttempt);
       }
 

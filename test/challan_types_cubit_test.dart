@@ -89,7 +89,7 @@ void main() {
         when(mockApiService.getChallanTypes())
             .thenAnswer((_) async {
           // Simulate slow response
-          await Future.delayed(Duration(milliseconds: 100));
+          await Future.delayed(const Duration(milliseconds: 100));
           return testTypes;
         });
         return cubit;
